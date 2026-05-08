@@ -443,6 +443,40 @@
           }
         },
         {
+          "name": "Beneficiary - Medical Wallet (Show)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/beneficiaries/{{beneficiary_id}}/medical-wallet"
+          }
+        },
+        {
+          "name": "Beneficiary - Medical Wallet (Credit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 22.5,\n  \"prescription_reference\": \"RX-2026-0001\",\n  \"notes\": \"Antibiotics\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/beneficiaries/{{beneficiary_id}}/medical-wallet/credits"
+          }
+        },
+        {
           "name": "Family Enrollment Status",
           "request": {
             "method": "PATCH",
