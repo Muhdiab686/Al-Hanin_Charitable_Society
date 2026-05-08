@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\FamilyEnrollmentStatus;
 use App\Models\Family;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -24,6 +25,7 @@ class FamilyFactory extends Factory
             'address' => $this->faker->address(),
             'members_count' => $this->faker->numberBetween(1, 10),
             'monthly_income' => $this->faker->randomFloat(2, 0, 5000),
+            'enrollment_status' => FamilyEnrollmentStatus::PendingBoard,
         ];
     }
 }

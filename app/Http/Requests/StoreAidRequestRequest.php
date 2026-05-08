@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FamilyEnrollmentStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,10 +26,31 @@ class StoreAidRequestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'beneficiary_id' => ['required', 'exists:beneficiaries,id'],
+            'beneficiary_id' => [
+                'required',
+                Rule::exists('beneficiaries', 'id')->where(function (Builder $query): void {
+                    $query->whereExists(function ($sub): void {
+                        $sub->from('families')
+                            ->whereColumn('families.id', 'beneficiaries.family_id')
+                            ->where('families.enrollment_status', FamilyEnrollmentStatus::Approved->value)
+                            ->where('families.has_direct_income', false)
+                            ->whereNull('families.aid_paused_at');
+                    });
+                }),
+            ],
             'type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription'])],
             'requested_amount' => ['nullable', 'numeric', 'min:0'],
             'description' => ['required', 'string', 'max:1000'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'beneficiary_id.exists' => __('The selected beneficiary is invalid or their family enrollment is not approved.'),
         ];
     }
 }

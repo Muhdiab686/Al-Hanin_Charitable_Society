@@ -1,0 +1,1119 @@
+{
+  "info": {
+    "_postman_id": "3d9a6a95-7b4b-4e89-a9cc-12dd6adf6b32",
+    "name": "Hanin Charity API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "REST API collection for Hanin backend."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "beneficiary_id",
+      "value": "1"
+    },
+    {
+      "key": "family_id",
+      "value": "1"
+    },
+    {
+      "key": "aid_request_id",
+      "value": "1"
+    },
+    {
+      "key": "donation_id",
+      "value": "1"
+    },
+    {
+      "key": "inventory_item_id",
+      "value": "1"
+    },
+    {
+      "key": "appointment_id",
+      "value": "1"
+    },
+    {
+      "key": "doctor_payout_request_id",
+      "value": "1"
+    },
+    {
+      "key": "volunteer_opportunity_id",
+      "value": "1"
+    },
+    {
+      "key": "category_id",
+      "value": "1"
+    },
+    {
+      "key": "user_id",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"API User\",\n  \"email\": \"apiuser@example.com\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\",\n  \"role\": \"donor\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) {",
+                  "  pm.collectionVariables.set('token', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Roles Catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Users - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Users - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Staff\",\n  \"email\": \"newstaff@example.com\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\",\n  \"role\": \"secretary\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Users - Show",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Users - Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Staff\",\n  \"role\": \"accountant\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Users - Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Beneficiaries & Families",
+      "item": [
+        {
+          "name": "Beneficiaries - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/beneficiaries"
+          }
+        },
+        {
+          "name": "Beneficiaries - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"family\": {\n    \"head_name\": \"Head Name\",\n    \"members_count\": 5,\n    \"monthly_income\": 100,\n    \"enrollment_status\": \"pending_board\"\n  },\n  \"beneficiary\": {\n    \"national_id\": \"12345678901\",\n    \"name\": \"Beneficiary Name\",\n    \"is_head_of_family\": true\n  }\n}"
+            },
+            "url": "{{base_url}}/api/v1/beneficiaries"
+          }
+        },
+        {
+          "name": "Beneficiary - Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0999999999\",\n  \"notes\": \"Updated profile\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/beneficiaries/{{beneficiary_id}}"
+          }
+        },
+        {
+          "name": "Beneficiary - Recalculate Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/beneficiaries/{{beneficiary_id}}/recalculate-category"
+          }
+        },
+        {
+          "name": "Family Enrollment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enrollment_status\": \"approved\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/families/{{family_id}}/enrollment-status"
+          }
+        },
+        {
+          "name": "Family Aid Eligibility",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"has_direct_income\": true,\n  \"aid_pause_reason\": \"Direct salary\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/families/{{family_id}}/aid-eligibility"
+          }
+        },
+        {
+          "name": "Family Profile Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"members_count\": 6,\n  \"monthly_income\": 200\n}"
+            },
+            "url": "{{base_url}}/api/v1/families/{{family_id}}"
+          }
+        },
+        {
+          "name": "Family QR Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/families/{{family_id}}/qr-code"
+          }
+        },
+        {
+          "name": "QR Verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": \"hanin:REPLACE_WITH_QR_TOKEN\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/qr/verify"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Aid Requests",
+      "item": [
+        {
+          "name": "Aid Requests - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/aid-requests"
+          }
+        },
+        {
+          "name": "Aid Requests - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"beneficiary_id\": {{beneficiary_id}},\n  \"type\": \"special_item\",\n  \"description\": \"Need winter supplies\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-requests"
+          }
+        },
+        {
+          "name": "Aid Request - Review",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"approved\",\n  \"review_note\": \"Approved\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-requests/{{aid_request_id}}/review"
+          }
+        },
+        {
+          "name": "Aid Request - Inventory Distribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"inventory_item_id\": {{inventory_item_id}},\n      \"quantity\": 1,\n      \"notes\": \"Distribution batch\"\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-requests/{{aid_request_id}}/inventory-distributions"
+          }
+        },
+        {
+          "name": "Aid Request - Confirm Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"allocation_ids\": [1],\n  \"delivery_note\": \"Delivered to beneficiary\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-requests/{{aid_request_id}}/deliveries"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Aid Distribution Plans",
+      "item": [
+        {
+          "name": "Plans - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/aid-distribution-plans"
+          }
+        },
+        {
+          "name": "Plans - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Monthly plan\",\n  \"aid_type\": \"special_item\",\n  \"distribution_date\": \"2026-05-20\",\n  \"total_units\": 100\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-distribution-plans"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories Rules",
+      "item": [
+        {
+          "name": "Rules - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/categories/rules"
+          }
+        },
+        {
+          "name": "Rules - Upsert",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_monthly_income\": 200,\n  \"min_family_members\": 4,\n  \"requires_medical_case\": false,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/categories/{{category_id}}/rule"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Donations & Inventory",
+      "item": [
+        {
+          "name": "Donations - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/donations"
+          }
+        },
+        {
+          "name": "Donation - Cash",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"cash\",\n  \"channel\": \"manual\",\n  \"cash_amount\": 250.00,\n  \"donor_name\": \"Donor A\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/donations"
+          }
+        },
+        {
+          "name": "Donation - In Kind",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"in_kind\",\n  \"donor_name\": \"Donor B\",\n  \"items\": [\n    {\n      \"name\": \"Rice\",\n      \"spoilage_category\": \"non_perishable\",\n      \"quantity\": 20,\n      \"storage_location\": \"A1\"\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/v1/donations"
+          }
+        },
+        {
+          "name": "Donation - Show",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/donations/{{donation_id}}"
+          }
+        },
+        {
+          "name": "Inventory - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/inventory-items?status=stored&spoilage_category=perishable&q=rice"
+          }
+        },
+        {
+          "name": "Inventory - Remove",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2,\n  \"reason\": \"expired\",\n  \"notes\": \"expired stock\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/inventory-items/{{inventory_item_id}}/remove"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clinic",
+      "item": [
+        {
+          "name": "Clinic Staff - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/clinic/staff"
+          }
+        },
+        {
+          "name": "Clinic Staff - Upsert",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{user_id}},\n  \"role\": \"doctor\",\n  \"monthly_salary\": 400,\n  \"consultation_fee\": 10,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/api/v1/clinic/staff"
+          }
+        },
+        {
+          "name": "Appointments - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/appointments?from=2026-05-01&to=2026-05-31&status=scheduled"
+          }
+        },
+        {
+          "name": "Appointments - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"beneficiary_id\": {{beneficiary_id}},\n  \"doctor_id\": {{user_id}},\n  \"scheduled_at\": \"2026-05-22 10:00:00\",\n  \"reason\": \"Routine check\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/appointments"
+          }
+        },
+        {
+          "name": "Appointments - Cancel",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"rescheduled\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/appointments/{{appointment_id}}/cancel"
+          }
+        },
+        {
+          "name": "Medical Records - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/medical-records"
+          }
+        },
+        {
+          "name": "Medical Records - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clinic_appointment_id\": {{appointment_id}},\n  \"diagnosis\": \"Diagnosis text\",\n  \"tests_result\": \"Normal\",\n  \"prescription\": \"Medicine\",\n  \"prescription_cost\": 15.00\n}"
+            },
+            "url": "{{base_url}}/api/v1/medical-records"
+          }
+        },
+        {
+          "name": "Doctor Payout Requests - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/doctor-payout-requests"
+          }
+        },
+        {
+          "name": "Doctor Payout Requests - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period_start\": \"2026-05-01\",\n  \"period_end\": \"2026-05-31\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/doctor-payout-requests"
+          }
+        },
+        {
+          "name": "Doctor Payout Requests - Review",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"approved\",\n  \"review_note\": \"ok\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/doctor-payout-requests/{{doctor_payout_request_id}}/review"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Volunteers",
+      "item": [
+        {
+          "name": "Opportunities - List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/volunteer-opportunities"
+          }
+        },
+        {
+          "name": "Opportunities - Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Aid delivery support\",\n  \"description\": \"Help in delivery day\",\n  \"required_slots\": 10,\n  \"starts_at\": \"2026-05-25 09:00:00\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/volunteer-opportunities"
+          }
+        },
+        {
+          "name": "Opportunities - Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"required_slots\": 12,\n  \"status\": \"open\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/volunteer-opportunities/{{volunteer_opportunity_id}}"
+          }
+        },
+        {
+          "name": "Opportunities - Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/volunteer-opportunities/{{volunteer_opportunity_id}}"
+          }
+        },
+        {
+          "name": "Opportunities - Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/volunteer-opportunities/{{volunteer_opportunity_id}}/register"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Finance",
+      "item": [
+        {
+          "name": "Finance Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/finance/summary?from=2026-05-01&to=2026-05-31"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -25,4 +25,9 @@ class Category extends Model
     {
         return $this->hasMany(Beneficiary::class);
     }
+
+    public function rules(): HasMany
+    {
+        return $this->hasMany(CategoryRule::class);
+    }
 }

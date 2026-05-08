@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
+use App\Models\Category;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -20,6 +21,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $permissions = [
             'beneficiaries.manage',
             'beneficiaries.view',
+            'families.enrollment.review',
             'aid.distribute',
             'aid.request.create',
             'aid.request.review',
@@ -36,6 +38,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.manage',
             'roles.manage',
             'volunteers.manage',
+            'volunteers.view',
+            'volunteers.register',
         ];
 
         foreach ($permissions as $permission) {
@@ -52,6 +56,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'appointments.view',
                 'medical.records.view',
                 'volunteers.manage',
+                'volunteers.view',
             ],
             UserRole::Accountant->value => [
                 'donations.create',
@@ -67,11 +72,15 @@ class RolesAndPermissionsSeeder extends Seeder
             UserRole::Storekeeper->value => [
                 'inventory.manage',
                 'inventory.view',
+                'donations.create',
+                'donations.view',
                 'aid.distribute',
             ],
             UserRole::Volunteer->value => [
                 'aid.distribute',
                 'aid.request.create',
+                'volunteers.view',
+                'volunteers.register',
             ],
             UserRole::Beneficiary->value => [
                 'aid.request.create',
@@ -88,5 +97,39 @@ class RolesAndPermissionsSeeder extends Seeder
             $role = Role::findOrCreate($roleName);
             $role->syncPermissions($assignedPermissions);
         }
+
+        Role::findOrCreate(UserRole::Admin->value)->syncPermissions(Permission::query()->pluck('name')->all());
+
+        $financial = Category::query()->firstOrCreate(
+            ['name' => 'financial'],
+            ['priority' => 1, 'description' => 'Low-income families']
+        );
+        $health = Category::query()->firstOrCreate(
+            ['name' => 'health'],
+            ['priority' => 2, 'description' => 'Families with medical cases']
+        );
+        $family = Category::query()->firstOrCreate(
+            ['name' => 'family'],
+            ['priority' => 3, 'description' => 'Large family households']
+        );
+
+        $financial->rules()->updateOrCreate([], [
+            'max_monthly_income' => 150,
+            'min_family_members' => null,
+            'requires_medical_case' => false,
+            'is_active' => true,
+        ]);
+        $health->rules()->updateOrCreate([], [
+            'max_monthly_income' => null,
+            'min_family_members' => null,
+            'requires_medical_case' => true,
+            'is_active' => true,
+        ]);
+        $family->rules()->updateOrCreate([], [
+            'max_monthly_income' => 350,
+            'min_family_members' => 5,
+            'requires_medical_case' => false,
+            'is_active' => true,
+        ]);
     }
 }

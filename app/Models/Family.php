@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FamilyEnrollmentStatus;
 use Database\Factories\FamilyFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,13 @@ class Family extends Model
     /**
      * @var list<string>
      */
+    protected $hidden = [
+        'qr_token',
+    ];
+
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'family_code',
         'head_name',
@@ -22,7 +30,23 @@ class Family extends Model
         'address',
         'members_count',
         'monthly_income',
+        'has_direct_income',
+        'aid_paused_at',
+        'aid_pause_reason',
+        'enrollment_status',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'enrollment_status' => FamilyEnrollmentStatus::class,
+            'has_direct_income' => 'boolean',
+            'aid_paused_at' => 'datetime',
+        ];
+    }
 
     public function beneficiaries(): HasMany
     {

@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FamilyEnrollmentStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBeneficiaryRequest extends FormRequest
 {
@@ -28,6 +30,11 @@ class StoreBeneficiaryRequest extends FormRequest
             'family.address' => ['nullable', 'string', 'max:500'],
             'family.members_count' => ['required', 'integer', 'min:1'],
             'family.monthly_income' => ['nullable', 'numeric', 'min:0'],
+            'family.enrollment_status' => [
+                'nullable',
+                'string',
+                Rule::in([FamilyEnrollmentStatus::Draft->value, FamilyEnrollmentStatus::PendingBoard->value]),
+            ],
 
             'beneficiary.national_id' => ['required', 'string', 'max:100', 'unique:beneficiaries,national_id'],
             'beneficiary.name' => ['required', 'string', 'max:255'],

@@ -1,0 +1,122 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Enums\FamilyEnrollmentStatus;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreAidDistributionPlanRequest;
+use App\Models\AidDistributionPlan;
+use App\Models\AidDistributionPlanLine;
+use App\Models\Family;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class AidDistributionPlanController extends Controller
+{
+    public function index(): JsonResponse
+    {
+        $plans = AidDistributionPlan::query()
+            ->with('creator:id,name,email')
+            ->withCount('lines')
+            ->latest()
+            ->paginate(15);
+
+        return response()->json($plans);
+    }
+
+    public function store(StoreAidDistributionPlanRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $eligibleFamilies = Family::query()
+            ->where('enrollment_status', FamilyEnrollmentStatus::Approved->value)
+            ->where('has_direct_income', false)
+            ->whereNull('aid_paused_at')
+            ->with(['beneficiaries' => fn ($query) => $query->orderByDesc('is_head_of_family')->orderBy('id')])
+            ->get();
+
+        if ($eligibleFamilies->isEmpty()) {
+            throw ValidationException::withMessages([
+                'eligible_families' => [__('No eligible families found for this distribution plan.')],
+            ]);
+        }
+
+        $plan = DB::transaction(function () use ($request, $validated, $eligibleFamilies): AidDistributionPlan {
+            $plan = AidDistributionPlan::query()->create([
+                'title' => $validated['title'],
+                'aid_type' => $validated['aid_type'],
+                'distribution_date' => $validated['distribution_date'],
+                'eligible_families_count' => $eligibleFamilies->count(),
+                'total_amount' => $validated['total_amount'] ?? null,
+                'total_units' => $validated['total_units'] ?? null,
+                'status' => 'draft',
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => $request->user()->id,
+            ]);
+
+            if ($validated['aid_type'] === 'urgent_financial') {
+                $this->createAmountLines($plan, (float) $validated['total_amount'], $eligibleFamilies->all());
+            } else {
+                $this->createUnitLines($plan, (int) $validated['total_units'], $eligibleFamilies->all());
+            }
+
+            return $plan;
+        });
+
+        return response()->json([
+            'message' => __('Aid distribution plan created successfully.'),
+            'plan' => $plan->load(['creator:id,name,email', 'lines.family', 'lines.beneficiary']),
+        ], 201);
+    }
+
+    /**
+     * @param  array<int, Family>  $families
+     */
+    private function createAmountLines(AidDistributionPlan $plan, float $totalAmount, array $families): void
+    {
+        $count = count($families);
+        $base = floor(($totalAmount / $count) * 100) / 100;
+        $allocatedBase = $base * $count;
+        $remainderCents = (int) round(($totalAmount - $allocatedBase) * 100);
+
+        foreach ($families as $index => $family) {
+            $extra = $index < $remainderCents ? 0.01 : 0.00;
+            $beneficiary = $family->beneficiaries->first();
+
+            AidDistributionPlanLine::query()->create([
+                'aid_distribution_plan_id' => $plan->id,
+                'family_id' => $family->id,
+                'beneficiary_id' => $beneficiary?->id,
+                'allocated_amount' => $base + $extra,
+                'allocated_units' => null,
+                'allocation_rank' => $index + 1,
+                'allocation_note' => __('Equal-share financial allocation.'),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<int, Family>  $families
+     */
+    private function createUnitLines(AidDistributionPlan $plan, int $totalUnits, array $families): void
+    {
+        $count = count($families);
+        $base = intdiv($totalUnits, $count);
+        $remainder = $totalUnits % $count;
+
+        foreach ($families as $index => $family) {
+            $beneficiary = $family->beneficiaries->first();
+
+            AidDistributionPlanLine::query()->create([
+                'aid_distribution_plan_id' => $plan->id,
+                'family_id' => $family->id,
+                'beneficiary_id' => $beneficiary?->id,
+                'allocated_amount' => null,
+                'allocated_units' => $base + ($index < $remainder ? 1 : 0),
+                'allocation_rank' => $index + 1,
+                'allocation_note' => __('Equal-share item allocation.'),
+            ]);
+        }
+    }
+}

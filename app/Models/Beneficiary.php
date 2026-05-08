@@ -25,6 +25,7 @@ class Beneficiary extends Model
         'date_of_birth',
         'phone',
         'status',
+        'medical_wallet_balance',
         'is_head_of_family',
         'notes',
     ];
@@ -36,6 +37,7 @@ class Beneficiary extends Model
     {
         return [
             'date_of_birth' => 'date',
+            'medical_wallet_balance' => 'decimal:2',
             'is_head_of_family' => 'boolean',
         ];
     }
@@ -58,5 +60,10 @@ class Beneficiary extends Model
     public function aidRequests(): HasMany
     {
         return $this->hasMany(AidRequest::class);
+    }
+
+    public function prescriptionCredits(): HasMany
+    {
+        return $this->hasMany(MedicalPrescriptionCredit::class);
     }
 }

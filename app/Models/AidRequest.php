@@ -51,4 +51,9 @@ class AidRequest extends Model
     {
         return $this->hasMany(ApprovalRequest::class);
     }
+
+    public function inventoryAllocations(): HasMany
+    {
+        return $this->hasMany(AidInventoryAllocation::class);
+    }
 }
