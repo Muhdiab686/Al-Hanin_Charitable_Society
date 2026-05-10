@@ -28,6 +28,8 @@ class StoreDonationRequest extends FormRequest
             'donor_name' => ['nullable', 'string', 'max:255'],
             'donor_phone' => ['nullable', 'string', 'max:64'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'purpose' => ['nullable', 'string', 'max:500'],
+            'pledge_frequency' => ['nullable', Rule::in(['once', 'monthly', 'quarterly', 'yearly'])],
             'items' => ['sometimes', 'array'],
             'items.*.name' => ['required_with:items', 'string', 'max:255'],
             'items.*.spoilage_category' => ['required_with:items', Rule::enum(InventorySpoilageCategory::class)],

@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\VolunteerActivityKind;
 use Database\Factories\VolunteerOpportunityFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class VolunteerOpportunity extends Model
@@ -24,6 +26,7 @@ class VolunteerOpportunity extends Model
         'starts_at',
         'ends_at',
         'status',
+        'activity_kind',
         'created_by',
     ];
 
@@ -35,6 +38,7 @@ class VolunteerOpportunity extends Model
         return [
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'activity_kind' => VolunteerActivityKind::class,
         ];
     }
 
@@ -46,5 +50,11 @@ class VolunteerOpportunity extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(VolunteerOpportunityRegistration::class);
+    }
+
+    /** Beneficiaries reached or registered for outreach at this volunteer activity (typically awareness). */
+    public function linkedBeneficiaries(): BelongsToMany
+    {
+        return $this->belongsToMany(Beneficiary::class, 'bf_vol_opp_links')->withTimestamps();
     }
 }

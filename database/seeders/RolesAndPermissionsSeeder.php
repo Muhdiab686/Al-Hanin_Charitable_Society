@@ -37,6 +37,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'finance.expenses.manage',
             'users.manage',
             'roles.manage',
+            'communications.donor_chat',
             'volunteers.manage',
             'volunteers.view',
             'volunteers.register',
@@ -52,9 +53,11 @@ class RolesAndPermissionsSeeder extends Seeder
                 'beneficiaries.manage',
                 'beneficiaries.view',
                 'aid.request.review',
+                'aid.distribute',
                 'appointments.manage',
                 'appointments.view',
                 'medical.records.view',
+                'medical.records.manage',
                 'volunteers.manage',
                 'volunteers.view',
             ],
@@ -131,5 +134,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'requires_medical_case' => false,
             'is_active' => true,
         ]);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

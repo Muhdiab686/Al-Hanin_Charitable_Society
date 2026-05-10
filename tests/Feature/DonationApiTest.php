@@ -19,6 +19,30 @@ class DonationApiTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
     }
 
+    public function test_donor_can_record_donation_with_purpose_and_pledge_frequency(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::Donor->value]);
+        $user->syncRoles([UserRole::Donor->value]);
+        $token = $user->createToken('t')->plainTextToken;
+
+        $response = $this->postJson('/api/v1/donations', [
+            'type' => 'cash',
+            'cash_amount' => 40,
+            'channel' => 'web',
+            'purpose' => 'كسوة موسم الشتاء',
+            'pledge_frequency' => 'monthly',
+            'notes' => 'من بوابة المتبرع',
+        ], ['Authorization' => 'Bearer '.$token]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('donations', [
+            'registered_by' => $user->id,
+            'purpose' => 'كسوة موسم الشتاء',
+            'pledge_frequency' => 'monthly',
+            'channel' => 'web',
+        ]);
+    }
+
     public function test_accountant_can_record_cash_donation(): void
     {
         $user = User::factory()->create(['role' => UserRole::Accountant->value]);

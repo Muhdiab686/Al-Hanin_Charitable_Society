@@ -6,6 +6,7 @@ use Database\Factories\BeneficiaryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Beneficiary extends Model
@@ -65,5 +66,17 @@ class Beneficiary extends Model
     public function prescriptionCredits(): HasMany
     {
         return $this->hasMany(MedicalPrescriptionCredit::class);
+    }
+
+    /** Laboratory / imaging uploads linked administratively to the beneficiary (UC-34). */
+    public function labReports(): HasMany
+    {
+        return $this->hasMany(BeneficiaryLabReport::class);
+    }
+
+    /** Volunteer/outreach activities this beneficiary was linked to (e.g. awareness sessions). */
+    public function outreachVolunteerOpportunities(): BelongsToMany
+    {
+        return $this->belongsToMany(VolunteerOpportunity::class, 'bf_vol_opp_links')->withTimestamps();
     }
 }

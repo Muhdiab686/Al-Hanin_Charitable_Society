@@ -189,7 +189,7 @@ class AidInventoryDistributionApiTest extends TestCase
             ->assertJsonValidationErrors(['aid_request']);
     }
 
-    public function test_secretary_without_distribute_permission_cannot_allocate(): void
+    public function test_accountant_cannot_allocate_inventory_to_aid_request(): void
     {
         $aidRequest = $this->approvedAidRequest();
 
@@ -199,8 +199,8 @@ class AidInventoryDistributionApiTest extends TestCase
             'status' => InventoryItemStatus::Stored,
         ]);
 
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $accountant = User::factory()->create(['role' => UserRole::Accountant->value]);
+        $accountant->syncRoles([UserRole::Accountant->value]);
 
         $this->postJson(
             '/api/v1/aid-requests/'.$aidRequest->id.'/inventory-distributions',
@@ -209,7 +209,7 @@ class AidInventoryDistributionApiTest extends TestCase
                     ['inventory_item_id' => $item->id, 'quantity' => 1],
                 ],
             ],
-            ['Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken]
+            ['Authorization' => 'Bearer '.$accountant->createToken('a')->plainTextToken]
         )->assertForbidden();
     }
 

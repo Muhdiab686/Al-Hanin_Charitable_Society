@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Enums\DonationType;
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\UserRole;
 use App\Models\AidRequest;
 use App\Models\Beneficiary;
+use App\Models\Donation;
 use App\Models\Family;
+use App\Models\InventoryItem;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -66,6 +69,24 @@ class AdminDashboardAndRolesApiTest extends TestCase
             ->assertJsonPath('aid_requests.by_status.pending', 1)
             ->assertJsonPath('aid_requests.by_status.approved', 1)
             ->assertJsonPath('aid_requests.total', 2);
+    }
+
+    public function test_recent_donations_include_in_kind_units_sum(): void
+    {
+        $donation = Donation::factory()->create(['type' => DonationType::InKind]);
+        InventoryItem::factory()->create([
+            'donation_id' => $donation->id,
+            'quantity' => 42,
+            'quantity_remaining' => 42,
+        ]);
+
+        $response = $this->getJson('/api/v1/admin/dashboard', $this->adminHeaders());
+
+        $response->assertOk();
+        $recent = collect($response->json('analytics.recent_donations'));
+        $row = $recent->firstWhere('id', $donation->id);
+        $this->assertNotNull($row);
+        $this->assertSame(42, $row['in_kind_units']);
     }
 
     public function test_secretary_cannot_access_dashboard(): void

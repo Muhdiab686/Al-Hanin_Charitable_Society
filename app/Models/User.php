@@ -69,4 +69,10 @@ class User extends Authenticatable // implements MustVerifyEmail
     {
         return $this->hasMany(VolunteerOpportunityRegistration::class);
     }
+
+    /** Messages in the donor–admin chat thread keyed to this donor account. */
+    public function donorChatMessagesReceived(): HasMany
+    {
+        return $this->hasMany(DonorChatMessage::class, 'donor_id');
+    }
 }

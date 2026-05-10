@@ -15,7 +15,7 @@ class ClinicStaffController extends Controller
     {
         $profiles = ClinicStaffProfile::query()
             ->with('user:id,name,email,role')
-            ->latest()
+            ->latest('id')
             ->paginate(15);
 
         return response()->json($profiles);

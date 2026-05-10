@@ -9,19 +9,49 @@ use App\Http\Requests\UpdateBeneficiaryProfileRequest;
 use App\Models\Beneficiary;
 use App\Models\Family;
 use App\Services\BeneficiaryCategoryAssigner;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BeneficiaryController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $beneficiaries = Beneficiary::query()
-            ->with(['family', 'category'])
-            ->latest()
-            ->paginate(15);
+        $query = Beneficiary::query()->with(['family', 'category'])->latest();
 
-        return response()->json($beneficiaries);
+        $search = trim((string) $request->query('search', ''));
+
+        if ($search !== '') {
+            $like = '%'.addcslashes($search, '%_\\').'%';
+
+            $query->where(function (Builder $q) use ($like, $search): void {
+                $q->where('name', 'like', $like)
+                    ->orWhere('national_id', 'like', $like);
+
+                if (ctype_digit($search)) {
+                    $n = (int) $search;
+                    $q->orWhere('id', $n)->orWhere('family_id', $n);
+                }
+
+                $q->orWhereHas('family', function (Builder $fam) use ($like, $search): void {
+                    $fam->where('family_code', 'like', $like);
+
+                    if (ctype_digit($search)) {
+                        $fam->orWhere('id', (int) $search);
+                    }
+                });
+            });
+        }
+
+        return response()->json($query->paginate(15));
+    }
+
+    public function show(Beneficiary $beneficiary): JsonResponse
+    {
+        return response()->json([
+            'beneficiary' => $beneficiary->load(['family', 'category']),
+        ]);
     }
 
     public function store(StoreBeneficiaryRequest $request, BeneficiaryCategoryAssigner $assigner): JsonResponse

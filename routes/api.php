@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\CampaignReportingController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\RoleCatalogController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
@@ -8,16 +9,19 @@ use App\Http\Controllers\Api\AidRequestController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BeneficiaryController;
+use App\Http\Controllers\Api\BeneficiaryLabReportController;
 use App\Http\Controllers\Api\BeneficiaryMedicalWalletController;
 use App\Http\Controllers\Api\CategoryRuleController;
 use App\Http\Controllers\Api\ClinicStaffController;
 use App\Http\Controllers\Api\DoctorPayoutController;
 use App\Http\Controllers\Api\DonationController;
+use App\Http\Controllers\Api\DonorChatController;
 use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\MedicalRecordController;
 use App\Http\Controllers\Api\QrVerificationController;
+use App\Http\Controllers\Api\RoleOverviewController;
 use App\Http\Controllers\Api\VolunteerOpportunityController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +41,10 @@ Route::prefix('v1/auth')->group(function () {
 });
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+    Route::get('/overview', [RoleOverviewController::class, 'show']);
+    Route::get('/reporting/campaigns', [CampaignReportingController::class, 'index'])
+        ->middleware('permission:finance.reports.view|volunteers.manage|donations.view');
+
     Route::prefix('admin')->middleware('permission:users.manage')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/roles', [RoleCatalogController::class, 'index']);
@@ -47,6 +55,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.view');
     Route::post('/beneficiaries', [BeneficiaryController::class, 'store'])
         ->middleware('permission:beneficiaries.manage');
+    Route::get('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'show'])
+        ->middleware('permission:beneficiaries.view');
     Route::patch('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
         ->middleware('permission:beneficiaries.manage');
     Route::post('/beneficiaries/{beneficiary}/recalculate-category', [BeneficiaryController::class, 'recalculateCategory'])
@@ -55,6 +65,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:medical.records.view|medical.records.manage');
     Route::post('/beneficiaries/{beneficiary}/medical-wallet/credits', [BeneficiaryMedicalWalletController::class, 'credit'])
         ->middleware('permission:medical.records.manage');
+
+    Route::get('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'index'])
+        ->middleware('permission:beneficiaries.view|beneficiaries.manage');
+    Route::post('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'store'])
+        ->middleware('permission:beneficiaries.manage');
 
     Route::patch('/families/{family}/enrollment-status', [FamilyController::class, 'updateEnrollmentStatus'])
         ->middleware('permission:beneficiaries.manage|families.enrollment.review');
@@ -126,17 +141,32 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:finance.expenses.manage');
     Route::get('/finance/summary', [FinanceController::class, 'summary'])
         ->middleware('permission:finance.reports.view');
+    Route::post('/finance/expenses', [FinanceController::class, 'storeOperationalExpense'])
+        ->middleware('permission:finance.expenses.manage');
 
     Route::get('/volunteer-opportunities', [VolunteerOpportunityController::class, 'index'])
         ->middleware('permission:volunteers.view|volunteers.manage');
     Route::post('/volunteer-opportunities', [VolunteerOpportunityController::class, 'store'])
         ->middleware('permission:volunteers.manage');
+    Route::patch(
+        '/volunteer-opportunities/{volunteerOpportunity}/linked-beneficiaries',
+        [VolunteerOpportunityController::class, 'syncLinkedBeneficiaries'],
+    )->middleware('permission:volunteers.manage');
     Route::patch('/volunteer-opportunities/{volunteerOpportunity}', [VolunteerOpportunityController::class, 'update'])
         ->middleware('permission:volunteers.manage');
     Route::delete('/volunteer-opportunities/{volunteerOpportunity}', [VolunteerOpportunityController::class, 'destroy'])
         ->middleware('permission:volunteers.manage');
     Route::post('/volunteer-opportunities/{volunteerOpportunity}/register', [VolunteerOpportunityController::class, 'register'])
         ->middleware('auth:sanctum');
+
+    Route::prefix('communications/donor-chat')->middleware('permission:communications.donor_chat')->group(function () {
+        Route::get('/donors', [DonorChatController::class, 'adminDonors']);
+        Route::get('/donors/{donor}/messages', [DonorChatController::class, 'adminThread']);
+        Route::post('/donors/{donor}/messages', [DonorChatController::class, 'adminStore']);
+    });
+
+    Route::get('/donor-chat/messages', [DonorChatController::class, 'donorIndex']);
+    Route::post('/donor-chat/messages', [DonorChatController::class, 'donorStore']);
 });
 
 Route::get('/user', function (Request $request) {

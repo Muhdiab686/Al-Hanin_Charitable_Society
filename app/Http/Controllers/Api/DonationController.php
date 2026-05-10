@@ -45,6 +45,8 @@ class DonationController extends Controller
                 'donor_name' => $validated['donor_name'] ?? null,
                 'donor_phone' => $validated['donor_phone'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'purpose' => $validated['purpose'] ?? null,
+                'pledge_frequency' => $validated['pledge_frequency'] ?? null,
                 'receipt_code' => $receiptCode,
                 'registered_by' => $request->user()->id,
             ]);

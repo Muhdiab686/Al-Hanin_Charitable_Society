@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\VolunteerActivityKind;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Enum;
 
 class StoreVolunteerOpportunityRequest extends FormRequest
 {
@@ -23,6 +25,7 @@ class StoreVolunteerOpportunityRequest extends FormRequest
             'required_slots' => ['required', 'integer', 'min:1'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'activity_kind' => ['sometimes', new Enum(VolunteerActivityKind::class)],
         ];
     }
 }

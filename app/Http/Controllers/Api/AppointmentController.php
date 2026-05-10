@@ -29,6 +29,10 @@ class AppointmentController extends Controller
             $query->where('status', (string) $request->string('status'));
         }
 
+        if ($request->filled('beneficiary_id')) {
+            $query->where('beneficiary_id', (int) $request->integer('beneficiary_id'));
+        }
+
         return response()->json($query->paginate(15));
     }
 

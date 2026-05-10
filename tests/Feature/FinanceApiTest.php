@@ -86,4 +86,44 @@ class FinanceApiTest extends TestCase
             'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
         ])->assertForbidden();
     }
+
+    public function test_admin_can_record_operational_expense(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin->value]);
+        $admin->syncRoles([UserRole::Admin->value]);
+
+        $response = $this->postJson('/api/v1/finance/expenses', [
+            'amount' => 198.75,
+            'description' => 'صيانة آليات المستودع',
+            'invoice_reference' => 'INV-9001',
+            'vendor' => 'مورد الأمل',
+            'notes' => 'فاتورة شهرية',
+        ], [
+            'Authorization' => 'Bearer '.$admin->createToken('adm')->plainTextToken,
+        ]);
+
+        $response->assertCreated()->assertJsonPath('transaction.type', 'expense');
+        $this->assertDatabaseHas('financial_transactions', [
+            'type' => 'expense',
+            'source' => 'operational_invoice',
+            'amount' => 198.75,
+            'recorded_by' => $admin->id,
+        ]);
+        $this->assertDatabaseHas('operational_expenses', [
+            'invoice_reference' => 'INV-9001',
+            'vendor' => 'مورد الأمل',
+        ]);
+    }
+
+    public function test_secretary_cannot_record_operational_expense(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
+
+        $this->postJson('/api/v1/finance/expenses', [
+            'amount' => 50,
+        ], [
+            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
+        ])->assertForbidden();
+    }
 }

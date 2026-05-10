@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\VolunteerActivityKind;
 use App\Models\User;
 use App\Models\VolunteerOpportunity;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -29,6 +30,7 @@ class VolunteerOpportunityFactory extends Factory
             'starts_at' => $this->faker->dateTimeBetween('+1 day', '+10 days'),
             'ends_at' => $this->faker->dateTimeBetween('+11 days', '+20 days'),
             'status' => 'open',
+            'activity_kind' => VolunteerActivityKind::General,
             'created_by' => User::factory(),
         ];
     }

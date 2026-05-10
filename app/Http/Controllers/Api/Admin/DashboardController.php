@@ -180,10 +180,20 @@ class DashboardController extends Controller
                 'aid_distribution_by_type' => $aidDistributionByType,
                 'donations_by_channel' => $donationsByChannel,
                 'recent_donations' => Donation::query()
-                    ->select(['id', 'receipt_code', 'type', 'channel', 'cash_amount', 'created_at'])
+                    ->select(['donations.id', 'donations.receipt_code', 'donations.type', 'donations.channel', 'donations.cash_amount', 'donations.created_at'])
+                    ->withSum('inventoryItems as in_kind_units', 'quantity')
                     ->latest()
                     ->limit(5)
-                    ->get(),
+                    ->get()
+                    ->map(fn (Donation $d): array => [
+                        'id' => $d->id,
+                        'receipt_code' => $d->receipt_code,
+                        'type' => $d->type->value,
+                        'channel' => $d->channel,
+                        'cash_amount' => $d->cash_amount,
+                        'created_at' => $d->created_at?->toISOString(),
+                        'in_kind_units' => (int) ($d->in_kind_units ?? 0),
+                    ]),
                 'recent_aid_requests' => AidRequest::query()
                     ->with('beneficiary:id,name')
                     ->select(['id', 'beneficiary_id', 'type', 'status', 'created_at'])

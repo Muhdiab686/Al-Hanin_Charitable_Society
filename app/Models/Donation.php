@@ -25,6 +25,8 @@ class Donation extends Model
         'donor_name',
         'donor_phone',
         'notes',
+        'purpose',
+        'pledge_frequency',
         'receipt_code',
         'registered_by',
     ];

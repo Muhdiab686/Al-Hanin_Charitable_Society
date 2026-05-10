@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\VolunteerActivityKind;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreVolunteerOpportunityRequest;
+use App\Http\Requests\SyncVolunteerOpportunityLinkedBeneficiariesRequest;
 use App\Http\Requests\UpdateVolunteerOpportunityRequest;
 use App\Models\VolunteerOpportunity;
 use App\Models\VolunteerOpportunityRegistration;
@@ -17,7 +19,7 @@ class VolunteerOpportunityController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = VolunteerOpportunity::query()
-            ->withCount('registrations')
+            ->withCount(['registrations', 'linkedBeneficiaries'])
             ->with('creator:id,name,email')
             ->latest();
 
@@ -32,6 +34,10 @@ class VolunteerOpportunityController extends Controller
     {
         $validated = $request->validated();
 
+        $activityKind = isset($validated['activity_kind'])
+            ? VolunteerActivityKind::from($validated['activity_kind'])
+            : VolunteerActivityKind::General;
+
         $opportunity = VolunteerOpportunity::query()->create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -40,6 +46,7 @@ class VolunteerOpportunityController extends Controller
             'starts_at' => $validated['starts_at'],
             'ends_at' => $validated['ends_at'] ?? null,
             'status' => 'open',
+            'activity_kind' => $activityKind,
             'created_by' => $request->user()->id,
         ]);
 
@@ -134,5 +141,28 @@ class VolunteerOpportunityController extends Controller
             'registration' => $registration->load('user:id,name,email'),
             'opportunity' => $volunteerOpportunity->fresh(),
         ], 201);
+    }
+
+    public function syncLinkedBeneficiaries(
+        SyncVolunteerOpportunityLinkedBeneficiariesRequest $request,
+        VolunteerOpportunity $volunteerOpportunity,
+    ): JsonResponse {
+        if ($volunteerOpportunity->activity_kind !== VolunteerActivityKind::Awareness) {
+            throw ValidationException::withMessages([
+                'volunteer_opportunity' => [__('Linked beneficiaries can only be recorded for awareness volunteer activities.')],
+            ]);
+        }
+
+        $ids = $request->validated()['beneficiary_ids'];
+        $volunteerOpportunity->linkedBeneficiaries()->sync($ids);
+
+        $linkedIds = $volunteerOpportunity->fresh()->linkedBeneficiaries->modelKeys();
+
+        return response()->json([
+            'message' => __('Linked beneficiaries updated.'),
+            'linked_beneficiary_ids' => collect($linkedIds)->sort()->values()->all(),
+            'opportunity' => $volunteerOpportunity->fresh(['creator:id,name,email'])
+                ->loadCount(['registrations', 'linkedBeneficiaries']),
+        ]);
     }
 }
