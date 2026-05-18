@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import type { Paginated } from '../../types/models'
+import { labelFamilyRelationshipAr } from '../../lib/operationalLabels'
 
 const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'draft', label: 'مسودة' },
@@ -62,6 +63,13 @@ export function SecretaryBeneficiariesPage() {
   const [qrFamilyId, setQrFamilyId] = useState('')
   const [qrImg, setQrImg] = useState<string | null>(null)
 
+  const [memberFamId, setMemberFamId] = useState('')
+  const [memberName, setMemberName] = useState('')
+  const [memberNid, setMemberNid] = useState('')
+  const [memberRel, setMemberRel] = useState('spouse')
+  const [memberGender, setMemberGender] = useState('')
+  const [familyMembers, setFamilyMembers] = useState<Record<string, unknown>[]>([])
+
   const load = useCallback(async () => {
     setLoading(true)
     setErr(null)
@@ -102,6 +110,7 @@ export function SecretaryBeneficiariesPage() {
           national_id: nid,
           name: bName.trim(),
           is_head_of_family: true,
+          family_relationship: 'head',
           phone: benPhone.trim() || null,
           date_of_birth: benDob.trim() || null,
           notes: benNotes.trim() || null,
@@ -708,6 +717,103 @@ export function SecretaryBeneficiariesPage() {
           </div>
         </div>
       ) : null}
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-base font-semibold text-white">أفراد العائلة (زوج/ة، أولاد)</h2>
+        <p className="mt-1 text-xs text-white/50">أضف أفراداً لعائلة مسجّلة مسبقاً — رب الأسرة يُسجّل عند إنشاء العائلة.</p>
+        <form
+          className="mt-4 grid gap-3 sm:grid-cols-2"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setMsg(null)
+            setErr(null)
+            try {
+              await api.addFamilyMember(Number(memberFamId), {
+                national_id: memberNid.trim() || `NID-M-${Date.now()}`,
+                name: memberName.trim(),
+                family_relationship: memberRel,
+                gender: memberGender || null,
+              })
+              setMsg('تمت إضافة فرد العائلة.')
+              const res = await api.fetchFamilyMembers(Number(memberFamId))
+              setFamilyMembers(res.members)
+              await load()
+            } catch (ex) {
+              setErr(extractErrorMessage(ex, 'فشل الإضافة'))
+            }
+          }}
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-white/55">معرّف العائلة</span>
+            <input
+              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={memberFamId}
+              onChange={(e) => setMemberFamId(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-white/55">صلة القرابة</span>
+            <select
+              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={memberRel}
+              onChange={(e) => setMemberRel(e.target.value)}
+            >
+              <option value="spouse">زوج / زوجة</option>
+              <option value="child">ابن / ابنة</option>
+              <option value="other">قريب آخر</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-[11px] text-white/55">الاسم الكامل</span>
+            <input
+              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={memberName}
+              onChange={(e) => setMemberName(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-white/55">الرقم الوطني</span>
+            <input
+              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={memberNid}
+              onChange={(e) => setMemberNid(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-white/55">الجنس (اختياري)</span>
+            <select
+              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={memberGender}
+              onChange={(e) => setMemberGender(e.target.value)}
+            >
+              <option value="">—</option>
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+          </label>
+          <button type="submit" className="rounded-lg bg-sky-600 py-2.5 font-medium text-white sm:col-span-2">
+            إضافة فرد للعائلة
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-white/20 py-2 text-xs text-white/80 sm:col-span-2"
+            onClick={() => {
+              void api.fetchFamilyMembers(Number(memberFamId)).then((r) => setFamilyMembers(r.members))
+            }}
+          >
+            عرض أفراد العائلة
+          </button>
+        </form>
+        {familyMembers.length > 0 ? (
+          <ul className="mt-3 space-y-1 text-xs">
+            {familyMembers.map((m) => (
+              <li key={String(m.id)} className="rounded bg-black/30 px-2 py-1">
+                {String(m.name)} — {labelFamilyRelationshipAr(m.family_relationship)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       <footer className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[11px] text-white/50">
         <strong className="text-white/65">ملاحظة:</strong> تسجيل الدخول والخروج متاح عامّةً من قائمة الهوية في أعلى الصفحة.

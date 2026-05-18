@@ -7,6 +7,8 @@ export function roleAppPath(role: UserRole): string {
       return '/app/admin'
     case 'secretary':
       return '/app/secretary'
+    case 'recording_secretary':
+      return '/app/recording-secretary'
     case 'accountant':
       return '/app/accountant'
     case 'doctor':
@@ -27,7 +29,8 @@ export function roleAppPath(role: UserRole): string {
 export function roleLabelAr(role: UserRole): string {
   const labels: Record<UserRole, string> = {
     admin: 'مدير النظام',
-    secretary: 'سكرتير',
+    secretary: 'سكرتير (عيادة وإدارة)',
+    recording_secretary: 'أمين السر',
     accountant: 'محاسب',
     doctor: 'طبيب',
     storekeeper: 'أمين مستودع',
@@ -40,7 +43,8 @@ export function roleLabelAr(role: UserRole): string {
 
 const labelsEn: Record<UserRole, string> = {
   admin: 'Administrator',
-  secretary: 'Secretary',
+  secretary: 'Clinic Secretary',
+  recording_secretary: 'Recording Secretary',
   accountant: 'Accountant',
   doctor: 'Doctor',
   storekeeper: 'Storekeeper',

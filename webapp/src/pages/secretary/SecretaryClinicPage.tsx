@@ -37,6 +37,7 @@ export function SecretaryClinicPage() {
   const [when, setWhen] = useState(() => new Date().toISOString().slice(0, 16))
 
   const [cancelReason, setCancelReason] = useState('طلب المستفيد')
+  const [candidates, setCandidates] = useState<{ id: number; name: string; email: string; role: string }[]>([])
   const [showStaffDialog, setShowStaffDialog] = useState(false)
   const [showCreateApptDialog, setShowCreateApptDialog] = useState(false)
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null)
@@ -82,8 +83,16 @@ export function SecretaryClinicPage() {
 
   useEffect(() => {
     void refresh()
+    void api.fetchClinicStaffCandidates().then(setCandidates).catch(() => setCandidates([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apptPage/filter applied via dedicated effects
   }, [])
+
+  useEffect(() => {
+    if (!showStaffDialog) {
+      return
+    }
+    void api.fetchClinicStaffCandidates().then(setCandidates).catch(() => setCandidates([]))
+  }, [showStaffDialog])
 
   useEffect(() => {
     void loadAppts(apptPage).catch((e: unknown) =>
@@ -346,13 +355,26 @@ export function SecretaryClinicPage() {
             </div>
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={onUpsertStaff}>
               <label className="flex flex-col gap-1 sm:col-span-2">
-                <span className="text-[11px] text-white/52">معرّف المستخدم في النظام (الطبيب أو السكرتيرة)</span>
-                <input
+                <span className="text-[11px] text-white/52">
+                  الطبيب / المساعد — يُنشأ حساب الطبيب أولاً من لوحة المدير (دور doctor)
+                </span>
+                <select
                   className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                  placeholder="user_id"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                />
+                >
+                  <option value="">— اختر من القائمة —</option>
+                  {candidates.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      #{c.id} {c.name} ({c.role === 'doctor' ? 'طبيب' : c.role})
+                    </option>
+                  ))}
+                </select>
+                {candidates.length === 0 ? (
+                  <span className="text-[10px] text-amber-200/80">
+                    لا يوجد أطباء بلا ملف عيادة — أنشئ مستخدماً بدور طبيب من المدير ثم حدّث هذه الصفحة.
+                  </span>
+                ) : null}
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] text-white/52">الدور في الطاقم</span>

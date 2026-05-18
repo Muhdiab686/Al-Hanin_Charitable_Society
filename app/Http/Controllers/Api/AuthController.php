@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Resources\AuthUserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Account created successfully.',
             'token' => $token,
-            'user' => $user,
+            'user' => AuthUserResource::make($user),
         ], 201);
     }
 
@@ -54,7 +55,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged in successfully.',
             'token' => $token,
-            'user' => $user,
+            'user' => AuthUserResource::make($user),
         ]);
     }
 
@@ -70,7 +71,7 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json([
-            'user' => $request->user(),
+            'user' => AuthUserResource::make($request->user()),
         ]);
     }
 }

@@ -166,7 +166,7 @@ export function AdminUsersPage() {
                     {o.value}
                   </option>
                 ))
-              : ['admin', 'secretary', 'beneficiary', 'donor'].map((r) => (
+              : ['admin', 'secretary', 'recording_secretary', 'beneficiary', 'donor'].map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

@@ -41,6 +41,8 @@ class StoreAidRequestRequest extends FormRequest
             'type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription'])],
             'requested_amount' => ['nullable', 'numeric', 'min:0'],
             'description' => ['required', 'string', 'max:1000'],
+            'attachments' => ['nullable', 'array', 'max:5'],
+            'attachments.*' => ['file', 'max:8192', 'mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx'],
         ];
     }
 

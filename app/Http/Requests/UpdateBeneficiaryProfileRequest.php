@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FamilyRelationship;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,8 @@ class UpdateBeneficiaryProfileRequest extends FormRequest
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'is_head_of_family' => ['sometimes', 'boolean'],
+            'family_relationship' => ['sometimes', 'string', Rule::enum(FamilyRelationship::class)],
+            'gender' => ['sometimes', 'nullable', 'string', Rule::in(['male', 'female'])],
         ];
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\FamilyEnrollmentStatus;
+use App\Enums\FamilyRelationship;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreFamilyMemberRequest;
 use App\Http\Requests\UpdateFamilyAidEligibilityRequest;
 use App\Http\Requests\UpdateFamilyEnrollmentStatusRequest;
 use App\Http\Requests\UpdateFamilyProfileRequest;
@@ -129,6 +131,56 @@ class FamilyController extends Controller
                 : __('Family aid eligibility has been resumed.'),
             'family' => $family->fresh()->load('beneficiaries'),
         ]);
+    }
+
+    public function members(Family $family): JsonResponse
+    {
+        $members = $family->beneficiaries()
+            ->with('category')
+            ->orderByRaw("CASE family_relationship WHEN 'head' THEN 1 WHEN 'spouse' THEN 2 WHEN 'child' THEN 3 ELSE 4 END")
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'family' => $family->only(['id', 'family_code', 'head_name', 'members_count']),
+            'members' => $members,
+        ]);
+    }
+
+    public function storeMember(
+        StoreFamilyMemberRequest $request,
+        Family $family,
+        BeneficiaryCategoryAssigner $assigner
+    ): JsonResponse {
+        $validated = $request->validated();
+        $relationship = FamilyRelationship::from($validated['family_relationship']);
+
+        $beneficiary = Beneficiary::query()->create([
+            'family_id' => $family->id,
+            'category_id' => $validated['category_id'] ?? null,
+            'national_id' => $validated['national_id'],
+            'name' => $validated['name'],
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'gender' => $validated['gender'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'is_head_of_family' => $relationship === FamilyRelationship::Head,
+            'family_relationship' => $relationship->value,
+        ]);
+
+        if (! isset($validated['category_id'])) {
+            $assigner->assign($beneficiary);
+        }
+
+        $memberCount = $family->beneficiaries()->count();
+        if ($memberCount > $family->members_count) {
+            $family->forceFill(['members_count' => $memberCount])->save();
+        }
+
+        return response()->json([
+            'message' => __('Family member added successfully.'),
+            'beneficiary' => $beneficiary->load(['family', 'category']),
+        ], 201);
     }
 
     public function updateProfile(

@@ -27,6 +27,9 @@ export function SecretaryAidPage() {
   const [reviewId, setReviewId] = useState('')
   const [decision, setDecision] = useState('approved')
   const [note, setNote] = useState('')
+  const [publishId, setPublishId] = useState('')
+  const [pubTitle, setPubTitle] = useState('')
+  const [pubSummary, setPubSummary] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,6 +49,22 @@ export function SecretaryAidPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  async function onPublish(e: FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    setErr(null)
+    try {
+      await api.publishAidRequestForDonors(Number(publishId), {
+        public_title: pubTitle.trim(),
+        public_summary: pubSummary.trim(),
+      })
+      setMsg('تم نشر الحالة للمتبرعين.')
+      await load()
+    } catch (ex) {
+      setErr(extractErrorMessage(ex, 'فشل النشر'))
+    }
+  }
 
   async function onReview(e: FormEvent) {
     e.preventDefault()
@@ -111,18 +130,19 @@ export function SecretaryAidPage() {
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">المستفيد</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">نوع الطلب</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">الحالة</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">للمتبرعين</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-white/55">
+                  <td colSpan={5} className="px-3 py-10 text-center text-white/55">
                     جاري التحميل…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-white/50">
+                  <td colSpan={5} className="px-3 py-10 text-center text-white/50">
                     لا بيانات لعرضها.
                   </td>
                 </tr>
@@ -147,6 +167,9 @@ export function SecretaryAidPage() {
                         >
                           {labelAidStatusAr(st)}
                         </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-white/65">
+                        {r.published_for_donors_at ? 'منشور' : st === 'approved' ? 'جاهز للنشر' : '—'}
                       </td>
                     </tr>
                   )
@@ -182,6 +205,42 @@ export function SecretaryAidPage() {
           />
           <button type="submit" className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white">
             إرسال القرار
+          </button>
+        </form>
+      </section>
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-base font-semibold text-white">نشر حالة طارئة للمتبرعين</h2>
+        <p className="mt-1 text-xs text-white/48">
+          بعد اعتماد الطلب فقط — يظهر للمتبرعين بدون بيانات شخصية. الطلبات المرفوضة لا تُنشر.
+        </p>
+        <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onPublish}>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] text-white/55">رقم الطلب المعتمد</span>
+            <input
+              className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 font-mono text-white"
+              value={publishId}
+              onChange={(e) => setPublishId(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-[11px] text-white/55">عنوان عام للمتبرعين</span>
+            <input
+              className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={pubTitle}
+              onChange={(e) => setPubTitle(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-[11px] text-white/55">ملخص الحالة (بدون أسماء أو تفاصيل حساسة)</span>
+            <textarea
+              className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              rows={3}
+              value={pubSummary}
+              onChange={(e) => setPubSummary(e.target.value)}
+            />
+          </label>
+          <button type="submit" className="rounded-lg bg-rose-600 px-4 py-2.5 font-medium text-white sm:col-span-2">
+            نشر للمتبرعين
           </button>
         </form>
       </section>

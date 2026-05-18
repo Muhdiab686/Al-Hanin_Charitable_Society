@@ -1,3 +1,4 @@
+import { normalizeApiUser } from '../auth/normalizeUser'
 import { apiClient } from './client'
 import type { AdminDashboardPayload, ApiUser, Paginated } from '../types/models'
 import type { RoleOverviewPayload } from '../types/overview'
@@ -11,9 +12,9 @@ export async function login(payload: {
 }): Promise<{ token: string; user: ApiUser }> {
   const { data } = await apiClient.post<{
     token: string
-    user: ApiUser
+    user: Record<string, unknown>
   }>(`${v1}/auth/login`, payload)
-  return data
+  return { token: data.token, user: normalizeApiUser(data.user) }
 }
 
 export async function register(payload: {
@@ -25,14 +26,14 @@ export async function register(payload: {
 }): Promise<{ token: string; user: ApiUser }> {
   const { data } = await apiClient.post<{
     token: string
-    user: ApiUser
+    user: Record<string, unknown>
   }>(`${v1}/auth/register`, payload)
-  return data
+  return { token: data.token, user: normalizeApiUser(data.user) }
 }
 
 export async function fetchMe(): Promise<ApiUser> {
-  const { data } = await apiClient.get<{ user: ApiUser }>(`${v1}/auth/me`)
-  return data.user
+  const { data } = await apiClient.get<{ user: Record<string, unknown> }>(`${v1}/auth/me`)
+  return normalizeApiUser(data.user)
 }
 
 export async function logout(): Promise<void> {
@@ -230,6 +231,32 @@ export async function updateFamilyProfile(
   return data
 }
 
+export async function fetchFamilyMembers(familyId: number): Promise<{
+  family: Record<string, unknown>
+  members: Record<string, unknown>[]
+}> {
+  const { data } = await apiClient.get<{ family: Record<string, unknown>; members: Record<string, unknown>[] }>(
+    `${v1}/families/${familyId}/members`,
+  )
+  return data
+}
+
+export async function addFamilyMember(
+  familyId: number,
+  payload: {
+    national_id: string
+    name: string
+    family_relationship: string
+    date_of_birth?: string | null
+    phone?: string | null
+    gender?: string | null
+    notes?: string | null
+  },
+): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/families/${familyId}/members`, payload)
+  return data
+}
+
 export async function fetchFamilyQrCode(familyId: number): Promise<{
   payload: string
   png_base64: string
@@ -259,7 +286,24 @@ export async function createAidRequest(payload: {
   type: string
   requested_amount?: number | null
   description: string
+  attachments?: File[]
 }): Promise<unknown> {
+  if (payload.attachments && payload.attachments.length > 0) {
+    const form = new FormData()
+    form.append('beneficiary_id', String(payload.beneficiary_id))
+    form.append('type', payload.type)
+    form.append('description', payload.description)
+    if (payload.requested_amount != null) {
+      form.append('requested_amount', String(payload.requested_amount))
+    }
+    payload.attachments.forEach((file, index) => {
+      form.append(`attachments[${index}]`, file)
+    })
+    const { data } = await apiClient.post(`${v1}/aid-requests`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  }
   const { data } = await apiClient.post(`${v1}/aid-requests`, payload)
   return data
 }
@@ -271,6 +315,27 @@ export async function reviewAidRequest(
   const { data } = await apiClient.patch(
     `${v1}/aid-requests/${aidRequestId}/review`,
     payload,
+  )
+  return data
+}
+
+export async function publishAidRequestForDonors(
+  aidRequestId: number,
+  payload: { public_title: string; public_summary: string },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(
+    `${v1}/aid-requests/${aidRequestId}/publish-for-donors`,
+    payload,
+  )
+  return data
+}
+
+export async function fetchPublishedAidRequests(params?: {
+  page?: number
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
+    `${v1}/published-aid-requests`,
+    { params },
   )
   return data
 }
@@ -404,6 +469,15 @@ export async function upsertClinicStaff(payload: {
 }): Promise<unknown> {
   const { data } = await apiClient.put(`${v1}/clinic/staff`, payload)
   return data
+}
+
+export async function fetchClinicStaffCandidates(): Promise<
+  { id: number; name: string; email: string; role: string }[]
+> {
+  const { data } = await apiClient.get<{ candidates: { id: number; name: string; email: string; role: string }[] }>(
+    `${v1}/clinic/staff/candidates`,
+  )
+  return data.candidates ?? []
 }
 
 export async function fetchAppointments(params?: {

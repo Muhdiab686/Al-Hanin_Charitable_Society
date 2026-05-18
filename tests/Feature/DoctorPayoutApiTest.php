@@ -87,5 +87,12 @@ class DoctorPayoutApiTest extends TestCase
             'Authorization' => 'Bearer '.$accountant->createToken('a')->plainTextToken,
         ])->assertOk()
             ->assertJsonPath('request.status', 'approved');
+
+        $this->assertDatabaseHas('financial_transactions', [
+            'type' => 'expense',
+            'source' => 'doctor_payout',
+            'reference_type' => DoctorPayoutRequest::class,
+            'reference_id' => $payout->id,
+        ]);
     }
 }

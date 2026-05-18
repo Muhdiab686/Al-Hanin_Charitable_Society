@@ -43,6 +43,7 @@ const donorSidebarLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 export type ShellVariant =
   | 'secretary'
+  | 'recording_secretary'
   | 'accountant'
   | 'doctor'
   | 'storekeeper'
@@ -67,8 +68,24 @@ const shells: Record<ShellVariant, ShellBlock> = {
     links: [
       { to: '/app/secretary', label: 'الرئيسية' },
       { to: '/app/secretary/beneficiaries', label: 'المستفيدون والعائلات' },
+      { to: '/app/secretary/aid-requests', label: 'طلبات المساعدة' },
       { to: '/app/secretary/clinic', label: 'العيادة والمواعيد' },
       { to: '/app/secretary/medical', label: 'السجل الطبي والمختبر' },
+    ],
+  },
+  recording_secretary: {
+    homePath: '/app/recording-secretary',
+    gradient: 'from-zinc-900 via-indigo-950 to-slate-950',
+    ring: 'ring-indigo-400/25',
+    title: 'مساحة أمين السر',
+    links: [
+      { to: '/app/recording-secretary', label: 'الرئيسية' },
+      { to: '/app/recording-secretary/beneficiaries', label: 'المستفيدون والعائلات' },
+      { to: '/app/recording-secretary/aid-requests', label: 'طلبات المساعدة' },
+      { to: '/app/recording-secretary/aid-plans', label: 'خطط التوزيع' },
+      { to: '/app/recording-secretary/categories', label: 'التصنيفات' },
+      { to: '/app/recording-secretary/volunteers', label: 'المتطوعون' },
+      { to: '/app/recording-secretary/qr', label: 'رمز QR' },
     ],
   },
   accountant: {
@@ -113,6 +130,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/donor', label: 'الرئيسية' },
       { to: '/app/donor/chat', label: 'الشات' },
       { to: '/app/donor/donations', label: 'تبرعاتي وإيصالاتي' },
+      { to: '/app/donor/urgent-aid', label: 'مساعدة طارئة' },
     ],
   },
   volunteer: {
@@ -145,7 +163,7 @@ export function AppShell({ variant }: { variant: ShellVariant }) {
   const cfg = shells[variant]
 
   return (
-    variant === 'secretary' ? (
+    variant === 'secretary' || variant === 'recording_secretary' ? (
       <div className={`min-h-dvh bg-gradient-to-br ${cfg.gradient} bg-fixed font-sans text-white`}>
         <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_90%_60%_at_50%_-10%,rgba(139,92,246,0.35),transparent)]" />
         <div className="relative flex min-h-dvh min-w-0 flex-row md:h-dvh md:max-h-dvh md:overflow-hidden">
@@ -153,11 +171,11 @@ export function AppShell({ variant }: { variant: ShellVariant }) {
             <div className="px-5 pb-4 pt-7">
               <div className="flex items-start gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 to-indigo-600 text-lg font-black text-white shadow-lg shadow-violet-900/50">
-                  س
+                  {variant === 'recording_secretary' ? 'أ' : 'س'}
                 </div>
                 <div className="min-w-0 flex-1 pt-0.5 text-start">
                   <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-violet-200/75">جمعية الحنين الخيرية</p>
-                  <h1 className="mt-0.5 text-[15px] font-bold tracking-tight text-white">لوحة السكرتيرة</h1>
+                  <h1 className="mt-0.5 text-[15px] font-bold tracking-tight text-white">{cfg.title}</h1>
                   {user ? (
                     <p className="mt-2 truncate text-[11px] leading-relaxed text-white/58">
                       {user.name}
@@ -170,7 +188,9 @@ export function AppShell({ variant }: { variant: ShellVariant }) {
             </div>
 
             <nav className="mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain px-4 pb-4">
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-300/55">مهام السكرتيرة</p>
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-300/55">
+                {variant === 'recording_secretary' ? 'مهام أمين السر' : 'مهام السكرتير'}
+              </p>
               {cfg.links.map((l) => (
                 <NavLink key={l.to} to={l.to} className={secretarySidebarLinkClass} end={l.to === cfg.homePath}>
                   {l.label}
@@ -191,7 +211,7 @@ export function AppShell({ variant }: { variant: ShellVariant }) {
 
           <header className="fixed inset-x-0 top-0 z-40 border-b border-white/15 bg-slate-950/92 px-3 py-2.5 shadow-[0_10px_40px_rgba(0,0,0,0.45)] backdrop-blur-md md:hidden">
             <div className="flex items-center gap-2">
-              <p className="shrink-0 text-[13px] font-bold text-white">لوحة السكرتيرة</p>
+              <p className="shrink-0 text-[13px] font-bold text-white">{cfg.title}</p>
               <div className="min-w-0 flex-1 overflow-x-auto">
                 <div className="flex w-max gap-1">
                   {cfg.links.map((l) => (

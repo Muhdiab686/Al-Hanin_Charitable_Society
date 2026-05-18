@@ -6,6 +6,7 @@ enum UserRole: string
 {
     case Admin = 'admin';
     case Secretary = 'secretary';
+    case RecordingSecretary = 'recording_secretary';
     case Accountant = 'accountant';
     case Doctor = 'doctor';
     case Storekeeper = 'storekeeper';

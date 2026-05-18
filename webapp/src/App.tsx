@@ -46,6 +46,7 @@ import { DoctorPayoutPage } from './pages/doctor/DoctorPayoutPage'
 import { DonorDonationsPage } from './pages/donor/DonorDonationsPage'
 import { DonorChatPage } from './pages/donor/DonorChatPage'
 import { DonorHomePage } from './pages/donor/DonorHomePage'
+import { DonorUrgentAidPage } from './pages/donor/DonorUrgentAidPage'
 import { AccountantDashboardPage } from './pages/roles/AccountantDashboardPage'
 import { SecretaryAidPage } from './pages/secretary/SecretaryAidPage'
 import { SecretaryAidPlansPage } from './pages/secretary/SecretaryAidPlansPage'
@@ -56,6 +57,7 @@ import { SecretaryHomePage } from './pages/secretary/SecretaryHomePage'
 import { SecretaryQrPage } from './pages/secretary/SecretaryQrPage'
 import { SecretaryMedicalPage } from './pages/secretary/SecretaryMedicalPage'
 import { SecretaryVolunteersPage } from './pages/secretary/SecretaryVolunteersPage'
+import { RecordingSecretaryHomePage } from './pages/recording-secretary/RecordingSecretaryHomePage'
 import { StorekeeperAidPage } from './pages/storekeeper/StorekeeperAidPage'
 import { StorekeeperDonationsPage } from './pages/storekeeper/StorekeeperDonationsPage'
 import { StorekeeperHomePage } from './pages/storekeeper/StorekeeperHomePage'
@@ -149,6 +151,26 @@ export default function App() {
           </Route>
 
           <Route
+            path="/app/recording-secretary"
+            element={
+              <RequireAuth>
+                <RoleRoute allow={['recording_secretary']}>
+                  <AppShell variant="recording_secretary" />
+                </RoleRoute>
+              </RequireAuth>
+            }
+          >
+            <Route index element={<RecordingSecretaryHomePage />} />
+            <Route path="beneficiaries" element={<SecretaryBeneficiariesPage />} />
+            <Route path="aid-requests" element={<SecretaryAidPage />} />
+            <Route path="aid-plans" element={<SecretaryAidPlansPage />} />
+            <Route path="categories" element={<SecretaryCategoriesPage />} />
+            <Route path="volunteers" element={<SecretaryVolunteersPage />} />
+            <Route path="campaign-reporting" element={<CampaignReportingPage />} />
+            <Route path="qr" element={<SecretaryQrPage />} />
+          </Route>
+
+          <Route
             path="/app/accountant"
             element={
               <RequireAuth>
@@ -211,6 +233,7 @@ export default function App() {
             <Route index element={<DonorHomePage />} />
             <Route path="chat" element={<DonorChatPage />} />
             <Route path="donations" element={<DonorDonationsPage />} />
+            <Route path="urgent-aid" element={<DonorUrgentAidPage />} />
           </Route>
 
           <Route

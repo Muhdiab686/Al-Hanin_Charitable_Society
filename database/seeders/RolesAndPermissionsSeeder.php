@@ -61,6 +61,15 @@ class RolesAndPermissionsSeeder extends Seeder
                 'volunteers.manage',
                 'volunteers.view',
             ],
+            UserRole::RecordingSecretary->value => [
+                'beneficiaries.manage',
+                'beneficiaries.view',
+                'families.enrollment.review',
+                'aid.request.review',
+                'aid.distribute',
+                'volunteers.manage',
+                'volunteers.view',
+            ],
             UserRole::Accountant->value => [
                 'donations.create',
                 'donations.view',

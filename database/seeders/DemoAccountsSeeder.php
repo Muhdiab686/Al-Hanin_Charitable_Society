@@ -33,6 +33,11 @@ class DemoAccountsSeeder extends Seeder
                 'role' => UserRole::Secretary,
             ],
             [
+                'name' => 'Recording Secretary User',
+                'email' => 'amin-alsirr@hanin.test',
+                'role' => UserRole::RecordingSecretary,
+            ],
+            [
                 'name' => 'Storekeeper User',
                 'email' => 'storekeeper@hanin.test',
                 'role' => UserRole::Storekeeper,
@@ -86,6 +91,11 @@ class DemoAccountsSeeder extends Seeder
             ])->save();
 
             $user->syncRoles([$data['role']->value]);
+
+            if ($data['role'] === UserRole::Admin) {
+                $user->forceFill(['role' => UserRole::Admin])->save();
+                $user->syncRoles([UserRole::Admin->value]);
+            }
         }
     }
 }

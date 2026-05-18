@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\FamilyEnrollmentStatus;
+use App\Enums\FamilyRelationship;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,8 @@ class StoreBeneficiaryRequest extends FormRequest
             'beneficiary.phone' => ['nullable', 'string', 'max:50'],
             'beneficiary.notes' => ['nullable', 'string'],
             'beneficiary.is_head_of_family' => ['nullable', 'boolean'],
+            'beneficiary.family_relationship' => ['nullable', 'string', Rule::enum(FamilyRelationship::class)],
+            'beneficiary.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
             'beneficiary.category_id' => ['nullable', 'exists:categories,id'],
         ];
     }

@@ -6,10 +6,12 @@ use App\Enums\InventoryItemStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AidRequestReviewRequest;
 use App\Http\Requests\ConfirmAidDeliveryRequest;
+use App\Http\Requests\PublishAidRequestForDonorsRequest;
 use App\Http\Requests\StoreAidInventoryDistributionRequest;
 use App\Http\Requests\StoreAidRequestRequest;
 use App\Models\AidInventoryAllocation;
 use App\Models\AidRequest;
+use App\Models\AidRequestAttachment;
 use App\Models\ApprovalRequest;
 use App\Models\InventoryItem;
 use Illuminate\Http\JsonResponse;
@@ -24,8 +26,10 @@ class AidRequestController extends Controller
         $query = AidRequest::query()->with([
             'beneficiary',
             'approvals',
+            'attachments',
             'inventoryAllocations.inventoryItem',
             'inventoryAllocations.deliveryOfficer:id,name,email',
+            'publisher:id,name,email',
         ]);
 
         if ($request->user()?->hasRole('beneficiary')) {
@@ -54,9 +58,22 @@ class AidRequestController extends Controller
             'decision' => 'pending',
         ]);
 
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('aid-requests/'.$aidRequest->id, 'local');
+                AidRequestAttachment::query()->create([
+                    'aid_request_id' => $aidRequest->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'size_bytes' => $file->getSize(),
+                ]);
+            }
+        }
+
         return response()->json([
             'message' => 'Aid request submitted successfully.',
-            'aid_request' => $aidRequest->load(['beneficiary', 'approvals']),
+            'aid_request' => $aidRequest->load(['beneficiary', 'approvals', 'attachments']),
         ], 201);
     }
 
@@ -91,7 +108,32 @@ class AidRequestController extends Controller
 
         return response()->json([
             'message' => 'Aid request reviewed successfully.',
-            'aid_request' => $aidRequest->fresh()->load(['beneficiary.family', 'approvals.reviewer']),
+            'aid_request' => $aidRequest->fresh()->load(['beneficiary.family', 'approvals.reviewer', 'attachments']),
+        ]);
+    }
+
+    public function publishForDonors(
+        PublishAidRequestForDonorsRequest $request,
+        AidRequest $aidRequest
+    ): JsonResponse {
+        if ($aidRequest->status !== 'approved') {
+            throw ValidationException::withMessages([
+                'aid_request' => [__('Only approved aid requests can be published for donors.')],
+            ]);
+        }
+
+        $validated = $request->validated();
+
+        $aidRequest->forceFill([
+            'public_title' => $validated['public_title'],
+            'public_summary' => $validated['public_summary'],
+            'published_for_donors_at' => now(),
+            'published_by' => $request->user()->id,
+        ])->save();
+
+        return response()->json([
+            'message' => __('Aid request published for donors successfully.'),
+            'aid_request' => $aidRequest->fresh()->load(['attachments', 'publisher:id,name,email']),
         ]);
     }
 
@@ -182,6 +224,15 @@ class AidRequestController extends Controller
                     'delivered_at' => now(),
                     'delivery_note' => $validated['delivery_note'] ?? null,
                 ])->save();
+            }
+
+            $pending = AidInventoryAllocation::query()
+                ->where('aid_request_id', $aidRequest->id)
+                ->whereNull('delivered_at')
+                ->exists();
+
+            if (! $pending) {
+                $aidRequest->forceFill(['status' => 'fulfilled'])->save();
             }
 
             return $allocations

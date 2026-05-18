@@ -33,6 +33,7 @@ class RoleOverviewController extends Controller
 
         return match ($user->role) {
             UserRole::Secretary => response()->json($this->secretaryPayload()),
+            UserRole::RecordingSecretary => response()->json($this->recordingSecretaryPayload()),
             UserRole::Accountant => response()->json($this->accountantPayload()),
             UserRole::Doctor => response()->json($this->doctorPayload($user)),
             UserRole::Storekeeper => response()->json($this->storekeeperPayload()),
@@ -41,6 +42,57 @@ class RoleOverviewController extends Controller
             UserRole::Beneficiary => response()->json($this->beneficiaryPayload($user)),
             default => abort(403, 'Unsupported role for overview.'),
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function recordingSecretaryPayload(): array
+    {
+        $aidByStatus = AidRequest::query()
+            ->toBase()
+            ->select('status')
+            ->selectRaw('COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->get()
+            ->mapWithKeys(fn ($row): array => [(string) $row->status => (int) $row->aggregate])
+            ->all();
+
+        $homesPendingEnrollment = Family::query()
+            ->whereIn('enrollment_status', [
+                FamilyEnrollmentStatus::Draft->value,
+                FamilyEnrollmentStatus::PendingBoard->value,
+            ])
+            ->count();
+
+        return [
+            '_kind' => 'role_overview',
+            'role' => UserRole::RecordingSecretary->value,
+            'title' => 'لوحة أمين السر — لمحة يومية',
+            'widgets' => [
+                ['key' => 'beneficiaries', 'label' => 'المستفيدون المسجّلون', 'value' => Beneficiary::query()->count()],
+                ['key' => 'families_enrollment_pending', 'label' => 'عائلات بانتظار اعتماد اللجنة', 'value' => $homesPendingEnrollment],
+                ['key' => 'aid_requests_total', 'label' => 'إجمالي طلبات المساعدة', 'value' => AidRequest::query()->count()],
+                ['key' => 'aid_pending_review', 'label' => 'طلبات بانتظار المراجعة', 'value' => AidRequest::query()->where('status', 'pending')->count()],
+                ['key' => 'open_volunteer_roles', 'label' => 'فرص تطوّع مفتوحة', 'value' => VolunteerOpportunity::query()
+                    ->where('status', 'open')
+                    ->whereColumn('filled_slots', '<', 'required_slots')
+                    ->count()],
+            ],
+            'charts' => [
+                $this->barChart('طلبات المساعدة حسب الحالة', $aidByStatus, [
+                    'pending' => 'قيد المراجعة',
+                    'approved' => 'مقبولة',
+                    'rejected' => 'مرفوضة',
+                    'fulfilled' => 'تم التنفيذ',
+                ]),
+                $this->monthlyTotalsChart(
+                    'طلبات مساعدة جديدة — آخر ستة أشهر',
+                    AidRequest::class,
+                    'created_at'
+                ),
+            ],
+        ];
     }
 
     /**

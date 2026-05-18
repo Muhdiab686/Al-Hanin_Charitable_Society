@@ -61,6 +61,19 @@ class RoleOverviewApiTest extends TestCase
             ]);
     }
 
+    public function test_recording_secretary_overview_returns_role_payload(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $user->syncRoles([UserRole::RecordingSecretary->value]);
+
+        $this->getJson('/api/v1/overview', [
+            'Authorization' => 'Bearer '.$user->createToken('rs')->plainTextToken,
+        ])
+            ->assertOk()
+            ->assertJsonPath('role', 'recording_secretary')
+            ->assertJsonPath('title', 'لوحة أمين السر — لمحة يومية');
+    }
+
     public function test_donor_overview_includes_own_donation_stats(): void
     {
         $donor = User::factory()->create(['role' => UserRole::Donor->value]);

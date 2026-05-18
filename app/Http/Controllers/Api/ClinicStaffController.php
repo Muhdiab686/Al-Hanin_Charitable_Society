@@ -8,6 +8,7 @@ use App\Http\Requests\UpsertClinicStaffProfileRequest;
 use App\Models\ClinicStaffProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class ClinicStaffController extends Controller
 {
@@ -21,6 +22,19 @@ class ClinicStaffController extends Controller
         return response()->json($profiles);
     }
 
+    public function candidates(): JsonResponse
+    {
+        $existingUserIds = ClinicStaffProfile::query()->pluck('user_id');
+
+        $users = User::query()
+            ->whereIn('role', [UserRole::Doctor->value, UserRole::Secretary->value])
+            ->when($existingUserIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $existingUserIds))
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role']);
+
+        return response()->json(['candidates' => $users]);
+    }
+
     public function upsert(UpsertClinicStaffProfileRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -31,8 +45,27 @@ class ClinicStaffController extends Controller
         }
 
         $user = User::query()->findOrFail($validated['user_id']);
-        $user->forceFill(['role' => $role])->save();
-        $user->syncRoles([$role->value]);
+
+        $protectedRoles = [
+            UserRole::Admin,
+            UserRole::Accountant,
+            UserRole::Storekeeper,
+            UserRole::Donor,
+            UserRole::Volunteer,
+            UserRole::Beneficiary,
+            UserRole::RecordingSecretary,
+        ];
+
+        if (in_array($user->role, $protectedRoles, true)) {
+            throw ValidationException::withMessages([
+                'user_id' => [__('This account cannot be assigned to clinic staff (protected system role). Create a dedicated doctor user from admin users.')],
+            ]);
+        }
+
+        if (! in_array($user->role, [UserRole::Doctor, UserRole::Secretary], true)) {
+            $user->forceFill(['role' => $role])->save();
+            $user->syncRoles([$role->value]);
+        }
 
         $profile = ClinicStaffProfile::query()->updateOrCreate(
             ['user_id' => $user->id],

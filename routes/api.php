@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\MedicalRecordController;
+use App\Http\Controllers\Api\PublishedAidRequestController;
 use App\Http\Controllers\Api\QrVerificationController;
 use App\Http\Controllers\Api\RoleOverviewController;
 use App\Http\Controllers\Api\VolunteerOpportunityController;
@@ -77,6 +78,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.manage|families.enrollment.review');
     Route::patch('/families/{family}', [FamilyController::class, 'updateProfile'])
         ->middleware('permission:beneficiaries.manage');
+    Route::get('/families/{family}/members', [FamilyController::class, 'members'])
+        ->middleware('permission:beneficiaries.view|beneficiaries.manage');
+    Route::post('/families/{family}/members', [FamilyController::class, 'storeMember'])
+        ->middleware('permission:beneficiaries.manage');
 
     Route::get('/families/{family}/qr-code', [FamilyController::class, 'qrCode']);
 
@@ -89,6 +94,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:aid.request.create');
     Route::patch('/aid-requests/{aidRequest}/review', [AidRequestController::class, 'review'])
         ->middleware('permission:aid.request.review');
+    Route::patch('/aid-requests/{aidRequest}/publish-for-donors', [AidRequestController::class, 'publishForDonors'])
+        ->middleware('permission:aid.request.review');
+    Route::get('/published-aid-requests', [PublishedAidRequestController::class, 'index'])
+        ->middleware('role:donor');
     Route::post('/aid-requests/{aidRequest}/inventory-distributions', [AidRequestController::class, 'storeInventoryDistribution'])
         ->middleware('permission:aid.distribute');
     Route::post('/aid-requests/{aidRequest}/deliveries', [AidRequestController::class, 'confirmDelivery'])
@@ -117,6 +126,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:inventory.manage');
 
     Route::get('/clinic/staff', [ClinicStaffController::class, 'index'])
+        ->middleware('permission:appointments.manage');
+    Route::get('/clinic/staff/candidates', [ClinicStaffController::class, 'candidates'])
         ->middleware('permission:appointments.manage');
     Route::put('/clinic/staff', [ClinicStaffController::class, 'upsert'])
         ->middleware('permission:appointments.manage');

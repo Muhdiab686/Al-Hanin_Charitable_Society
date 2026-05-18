@@ -28,6 +28,7 @@ class BeneficiaryFactory extends Factory
             'phone' => $this->faker->phoneNumber(),
             'status' => 'active',
             'is_head_of_family' => false,
+            'family_relationship' => 'head',
             'notes' => $this->faker->sentence(),
         ];
     }

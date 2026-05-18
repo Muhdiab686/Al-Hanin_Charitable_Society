@@ -79,6 +79,31 @@ export function labelInventoryStatusAr(code: unknown): string {
   return INVENTORY_STATUS_AR[k] ?? (k ? fallback(k) : '—')
 }
 
+const FAMILY_RELATIONSHIP_AR: Record<string, string> = {
+  head: 'رب الأسرة',
+  spouse: 'زوج / زوجة',
+  child: 'ابن / ابنة',
+  other: 'قريب آخر',
+}
+
+const SPOILAGE_CATEGORY_AR: Record<string, string> = {
+  non_perishable: 'غير سريع التلف (غذائي وعام)',
+  perishable: 'سريع التلف',
+  medical: 'مواد طبية / صيدلانية',
+}
+
+export function labelFamilyRelationshipAr(code: unknown): string {
+  const k = String(code ?? '').trim()
+
+  return FAMILY_RELATIONSHIP_AR[k] ?? (k ? fallback(k) : '—')
+}
+
+export function labelSpoilageCategoryAr(code: unknown): string {
+  const k = String(code ?? '').trim()
+
+  return SPOILAGE_CATEGORY_AR[k] ?? (k ? fallback(k) : '—')
+}
+
 export function labelRemovalReasonAr(code: unknown): string {
   const k = String(code ?? '').trim()
 

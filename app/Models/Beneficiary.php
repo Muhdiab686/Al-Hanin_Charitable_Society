@@ -28,6 +28,8 @@ class Beneficiary extends Model
         'status',
         'medical_wallet_balance',
         'is_head_of_family',
+        'family_relationship',
+        'gender',
         'notes',
     ];
 

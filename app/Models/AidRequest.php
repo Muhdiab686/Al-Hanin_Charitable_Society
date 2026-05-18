@@ -22,8 +22,12 @@ class AidRequest extends Model
         'type',
         'requested_amount',
         'description',
+        'public_title',
+        'public_summary',
         'status',
         'submitted_at',
+        'published_for_donors_at',
+        'published_by',
     ];
 
     /**
@@ -34,6 +38,7 @@ class AidRequest extends Model
         return [
             'requested_amount' => 'decimal:2',
             'submitted_at' => 'datetime',
+            'published_for_donors_at' => 'datetime',
         ];
     }
 
@@ -55,5 +60,21 @@ class AidRequest extends Model
     public function inventoryAllocations(): HasMany
     {
         return $this->hasMany(AidInventoryAllocation::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(AidRequestAttachment::class);
+    }
+
+    public function publisher(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'published_by');
+    }
+
+    public function isPublishedForDonors(): bool
+    {
+        return $this->published_for_donors_at !== null
+            && $this->status === 'approved';
     }
 }

@@ -1,6 +1,7 @@
 export type UserRole =
   | 'admin'
   | 'secretary'
+  | 'recording_secretary'
   | 'accountant'
   | 'doctor'
   | 'storekeeper'

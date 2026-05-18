@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\FamilyEnrollmentStatus;
+use App\Enums\FamilyRelationship;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBeneficiaryRequest;
 use App\Http\Requests\UpdateBeneficiaryProfileRequest;
@@ -73,6 +74,11 @@ class BeneficiaryController extends Controller
                 'enrollment_status' => $enrollmentStatus,
             ]);
 
+            $relationship = isset($validated['beneficiary']['family_relationship'])
+                ? FamilyRelationship::from($validated['beneficiary']['family_relationship'])
+                : FamilyRelationship::Head;
+            $isHead = $validated['beneficiary']['is_head_of_family'] ?? ($relationship === FamilyRelationship::Head);
+
             $beneficiary = Beneficiary::query()->create([
                 'family_id' => $family->id,
                 'category_id' => $validated['beneficiary']['category_id'] ?? null,
@@ -80,8 +86,10 @@ class BeneficiaryController extends Controller
                 'name' => $validated['beneficiary']['name'],
                 'date_of_birth' => $validated['beneficiary']['date_of_birth'] ?? null,
                 'phone' => $validated['beneficiary']['phone'] ?? null,
+                'gender' => $validated['beneficiary']['gender'] ?? null,
                 'notes' => $validated['beneficiary']['notes'] ?? null,
-                'is_head_of_family' => $validated['beneficiary']['is_head_of_family'] ?? false,
+                'is_head_of_family' => $isHead,
+                'family_relationship' => $relationship->value,
             ]);
 
             if (! isset($validated['beneficiary']['category_id'])) {

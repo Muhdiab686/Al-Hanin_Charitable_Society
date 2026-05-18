@@ -8,7 +8,9 @@ use App\Http\Requests\StoreDoctorPayoutRequest;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicStaffProfile;
 use App\Models\DoctorPayoutRequest;
+use App\Models\FinancialTransaction;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class DoctorPayoutController extends Controller
 {
@@ -69,12 +71,27 @@ class DoctorPayoutController extends Controller
 
         $validated = $request->validated();
 
-        $doctorPayoutRequest->forceFill([
-            'status' => $validated['decision'],
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-            'review_note' => $validated['review_note'] ?? null,
-        ])->save();
+        DB::transaction(function () use ($request, $doctorPayoutRequest, $validated): void {
+            $doctorPayoutRequest->forceFill([
+                'status' => $validated['decision'],
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
+                'review_note' => $validated['review_note'] ?? null,
+            ])->save();
+
+            if ($validated['decision'] === 'approved') {
+                FinancialTransaction::query()->create([
+                    'type' => 'expense',
+                    'source' => 'doctor_payout',
+                    'amount' => $doctorPayoutRequest->amount,
+                    'reference_type' => DoctorPayoutRequest::class,
+                    'reference_id' => $doctorPayoutRequest->id,
+                    'description' => 'Doctor payout #'.$doctorPayoutRequest->id,
+                    'recorded_by' => $request->user()->id,
+                    'recorded_at' => now(),
+                ]);
+            }
+        });
 
         return response()->json([
             'message' => __('Doctor payout request reviewed successfully.'),
