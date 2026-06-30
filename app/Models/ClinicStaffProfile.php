@@ -12,6 +12,8 @@ class ClinicStaffProfile extends Model
      */
     protected $fillable = [
         'user_id',
+        'specialty',
+        'bio',
         'monthly_salary',
         'consultation_fee',
         'is_active',

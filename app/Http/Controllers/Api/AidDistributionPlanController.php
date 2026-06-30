@@ -29,12 +29,16 @@ class AidDistributionPlanController extends Controller
     {
         $validated = $request->validated();
 
+        $filterCriteria = $validated['filter_criteria'] ?? [];
+
         $eligibleFamilies = Family::query()
             ->where('enrollment_status', FamilyEnrollmentStatus::Approved->value)
             ->where('has_direct_income', false)
             ->whereNull('aid_paused_at')
             ->with(['beneficiaries' => fn ($query) => $query->orderByDesc('is_head_of_family')->orderBy('id')])
-            ->get();
+            ->get()
+            ->filter(fn (Family $family): bool => $this->matchesFilterCriteria($family, $filterCriteria))
+            ->values();
 
         if ($eligibleFamilies->isEmpty()) {
             throw ValidationException::withMessages([
@@ -42,7 +46,7 @@ class AidDistributionPlanController extends Controller
             ]);
         }
 
-        $plan = DB::transaction(function () use ($request, $validated, $eligibleFamilies): AidDistributionPlan {
+        $plan = DB::transaction(function () use ($request, $validated, $eligibleFamilies, $filterCriteria): AidDistributionPlan {
             $plan = AidDistributionPlan::query()->create([
                 'title' => $validated['title'],
                 'aid_type' => $validated['aid_type'],
@@ -52,6 +56,7 @@ class AidDistributionPlanController extends Controller
                 'total_units' => $validated['total_units'] ?? null,
                 'status' => 'draft',
                 'notes' => $validated['notes'] ?? null,
+                'filter_criteria' => $filterCriteria ?: null,
                 'created_by' => $request->user()->id,
             ]);
 
@@ -118,5 +123,51 @@ class AidDistributionPlanController extends Controller
                 'allocation_note' => __('Equal-share item allocation.'),
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $criteria
+     */
+    private function matchesFilterCriteria(Family $family, array $criteria): bool
+    {
+        if ($criteria === []) {
+            return true;
+        }
+
+        $children = $family->beneficiaries->where('family_relationship', 'child');
+        $childrenCount = $children->count();
+
+        if (isset($criteria['min_children']) && $childrenCount < (int) $criteria['min_children']) {
+            return false;
+        }
+
+        if (isset($criteria['min_school_age_children'])) {
+            $schoolAge = $children->filter(function ($child): bool {
+                $age = $child->age ?? ($child->date_of_birth?->age);
+
+                return $age !== null && $age >= 5 && $age <= 18;
+            })->count();
+
+            if ($schoolAge < (int) $criteria['min_school_age_children']) {
+                return false;
+            }
+        }
+
+        if (isset($criteria['min_family_members']) && $family->members_count < (int) $criteria['min_family_members']) {
+            return false;
+        }
+
+        if (isset($criteria['max_monthly_income']) && (float) $family->monthly_income > (float) $criteria['max_monthly_income']) {
+            return false;
+        }
+
+        if (! empty($criteria['urgent_need'])) {
+            $needs = $family->urgent_needs ?? [];
+            if (! in_array($criteria['urgent_need'], $needs, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

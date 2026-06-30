@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\AuthUserResource;
 use App\Models\User;
+use App\Services\BeneficiaryAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,7 +17,7 @@ use Spatie\Permission\Models\Role;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request)
+    public function register(RegisterRequest $request, BeneficiaryAccountService $accountService)
     {
         $validated = $request->validated();
 
@@ -29,16 +30,22 @@ class AuthController extends Controller
         Role::findOrCreate($user->role->value);
         $user->syncRoles([$user->role->value]);
 
+        $beneficiary = null;
+        if ($user->role === UserRole::Beneficiary) {
+            $beneficiary = $accountService->linkUserToBeneficiary($user);
+        }
+
         $token = $user->createToken($request->userAgent() ?? 'web-client')->plainTextToken;
 
         return response()->json([
             'message' => 'Account created successfully.',
             'token' => $token,
-            'user' => AuthUserResource::make($user),
+            'beneficiary_id' => $beneficiary?->id,
+            'user' => AuthUserResource::make($user->fresh()),
         ], 201);
     }
 
-    public function login(LoginRequest $request): JsonResponse
+    public function login(LoginRequest $request, BeneficiaryAccountService $accountService): JsonResponse
     {
         $validated = $request->validated();
 
@@ -55,6 +62,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged in successfully.',
             'token' => $token,
+            'beneficiary_id' => $accountService->resolveBeneficiaryIdForUser($user),
             'user' => AuthUserResource::make($user),
         ]);
     }

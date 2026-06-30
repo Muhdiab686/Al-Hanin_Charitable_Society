@@ -6,6 +6,7 @@ import { labelFamilyRelationshipAr } from '../../lib/operationalLabels'
 
 const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'draft', label: 'مسودة' },
+  { value: 'under_review', label: 'قيد المراجعة' },
   { value: 'pending_board', label: 'بانتظار اللجنة' },
   { value: 'approved', label: 'معتمدة' },
   { value: 'rejected', label: 'مرفوضة' },
@@ -53,7 +54,8 @@ export function SecretaryBeneficiariesPage() {
   const [profIncome, setProfIncome] = useState('')
 
   const [walletBenId, setWalletBenId] = useState('')
-  const [walletJson, setWalletJson] = useState('')
+  const [walletBalance, setWalletBalance] = useState<string | null>(null)
+  const [walletCreditsCount, setWalletCreditsCount] = useState<number | null>(null)
   const [creditAmt, setCreditAmt] = useState('10')
 
   const [eligFamId, setEligFamId] = useState('')
@@ -192,7 +194,10 @@ export function SecretaryBeneficiariesPage() {
 
     try {
       const w = await api.fetchBeneficiaryMedicalWallet(Number(walletBenId))
-      setWalletJson(JSON.stringify(w, null, 2))
+      const wallet = w.medical_wallet as Record<string, unknown> | undefined
+      setWalletBalance(String(wallet?.balance ?? '0'))
+      const credits = wallet?.credits as { data?: unknown[] } | undefined
+      setWalletCreditsCount(Array.isArray(credits?.data) ? credits.data.length : 0)
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'فشل عرض المحفظة'))
     }
@@ -482,14 +487,15 @@ export function SecretaryBeneficiariesPage() {
             value={walletBenId}
             onChange={(e) => setWalletBenId(e.target.value)}
           />
-          <button type="submit" className="rounded-lg bg-white/10 px-4 py-2">
-            عرض JSON
+          <button type="submit" className="rounded-lg bg-white/10 px-4 py-2 transition active:scale-[0.98] hover:bg-white/15">
+            عرض الرصيد
           </button>
         </form>
-        {walletJson ? (
-          <pre className="mt-3 max-h-48 overflow-auto rounded-lg bg-black/40 p-3 text-xs text-emerald-100">
-            {walletJson}
-          </pre>
+        {walletBalance !== null ? (
+          <div className="mt-3 rounded-lg border border-teal-400/25 bg-teal-500/10 px-4 py-3 text-sm text-teal-50">
+            <p>الرصيد الحالي: <strong>{walletBalance}</strong></p>
+            <p className="mt-1 text-teal-100/80">عدد حركات الرصيد: {walletCreditsCount ?? 0}</p>
+          </div>
         ) : null}
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={onCredit}>
           <input

@@ -20,9 +20,13 @@ class ClinicAppointment extends Model
         'beneficiary_id',
         'doctor_id',
         'created_by',
+        'approved_by',
         'scheduled_at',
+        'approved_at',
         'status',
+        'workflow_status',
         'reason',
+        'requested_specialty',
         'cancelled_at',
         'cancellation_reason',
     ];
@@ -34,6 +38,7 @@ class ClinicAppointment extends Model
     {
         return [
             'scheduled_at' => 'datetime',
+            'approved_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -51,6 +56,11 @@ class ClinicAppointment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function medicalRecord(): HasOne

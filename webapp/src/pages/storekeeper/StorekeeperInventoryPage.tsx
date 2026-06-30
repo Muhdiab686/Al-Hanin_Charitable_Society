@@ -32,7 +32,6 @@ export function StorekeeperInventoryPage() {
 
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
-  const [showDispenseDialog, setShowDispenseDialog] = useState(false)
 
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null)
 
@@ -47,10 +46,6 @@ export function StorekeeperInventoryPage() {
   const [removeQty, setRemoveQty] = useState('1')
   const [removeReason, setRemoveReason] = useState('damaged')
   const [removeNotes, setRemoveNotes] = useState('')
-
-  const [dispenseQty, setDispenseQty] = useState('1')
-  const [prescriptionRef, setPrescriptionRef] = useState('')
-  const [dispenseBeneficiary, setDispenseBeneficiary] = useState('')
 
   const lowStockItems = useMemo(() => {
     return rows.filter((row) => Number(row.quantity_remaining ?? 0) <= LOW_STOCK_THRESHOLD)
@@ -140,43 +135,11 @@ export function StorekeeperInventoryPage() {
     }
   }
 
-  async function onDispenseByPrescription(e: FormEvent) {
-    e.preventDefault()
-    if (!selectedItem) {
-      return
-    }
-    setMsg(null)
-    setErr(null)
-    try {
-      const dispenseNote = [
-        'صرف دواء بوصفة',
-        prescriptionRef.trim() ? `مرجع الوصفة: ${prescriptionRef.trim()}` : null,
-        dispenseBeneficiary.trim() ? `المستفيد: ${dispenseBeneficiary.trim()}` : null,
-      ]
-        .filter(Boolean)
-        .join(' | ')
-
-      const res = (await api.removeInventoryItem(Number(selectedItem.id), {
-        quantity: Number(dispenseQty),
-        reason: 'other',
-        notes: dispenseNote,
-      })) as { removal?: { id?: number } }
-
-      setMsg(
-        `تم صرف الدواء من المخزون${res?.removal?.id ? ` — إيصال #${String(res.removal.id)}` : '.'}`,
-      )
-      setShowDispenseDialog(false)
-      await load()
-    } catch (e) {
-      setErr(extractErrorMessage(e, 'فشل صرف الدواء'))
-    }
-  }
-
   return (
     <div className="space-y-6 text-sm text-white/85">
       {(msg || err) && (
         <div
-          className={`rounded-xl px-4 py-3 ${err ? 'border border-red-400/35 bg-red-500/12 text-red-50' : 'border border-emerald-400/35 bg-emerald-500/12 text-emerald-50'}`}
+          className={`fixed inset-x-4 top-4 z-50 mx-auto max-w-lg rounded-xl px-4 py-3 shadow-lg ${err ? 'border border-red-400/35 bg-red-600/90 text-red-50' : 'border border-emerald-400/35 bg-emerald-600/90 text-emerald-50'}`}
         >
           {err ?? msg}
         </div>
@@ -187,15 +150,15 @@ export function StorekeeperInventoryPage() {
           <div>
             <h2 className="text-base font-semibold text-white">إدارة المستودع</h2>
             <p className="mt-1 text-xs text-white/55">
-              إدخال مواد جديدة مع الباركود/تاريخ الانتهاء، إخراج مواد بإيصال، متابعة الصلاحية، وصرف الدواء بموجب وصفة.
+              إدخال مواد للمستودع مع الباركود، إخراج مواد بإيصال، ومتابعة الصلاحية للمواد القابلة للتلف فقط.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowAddDialog(true)}
-            className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white"
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white transition active:scale-[0.98] hover:bg-orange-500"
           >
-            + إدخال مادة جديدة
+            + إضافة مادة
           </button>
         </div>
       </section>
@@ -330,22 +293,9 @@ export function StorekeeperInventoryPage() {
                             setRemoveNotes('')
                             setShowRemoveDialog(true)
                           }}
-                          className="rounded-md bg-rose-700 px-2 py-1 text-[11px] text-white"
+                          className="rounded-md bg-rose-700 px-2 py-1 text-[11px] text-white transition active:scale-[0.98] hover:bg-rose-600"
                         >
                           إخراج مادة
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedItem(r)
-                            setDispenseQty('1')
-                            setPrescriptionRef('')
-                            setDispenseBeneficiary('')
-                            setShowDispenseDialog(true)
-                          }}
-                          className="rounded-md bg-emerald-700 px-2 py-1 text-[11px] text-white"
-                        >
-                          صرف دواء
                         </button>
                       </div>
                     </td>
@@ -366,6 +316,9 @@ export function StorekeeperInventoryPage() {
                 إغلاق
               </button>
             </div>
+            <p className="mb-3 text-xs text-white/60">
+              أدخل بيانات المادة الجديدة. للمواد غير القابلة للتلف لا يلزم تاريخ انتهاء. يُولَّد باركود تلقائياً عند الحفظ.
+            </p>
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={onAddMaterial}>
               <input
                 required
@@ -384,18 +337,29 @@ export function StorekeeperInventoryPage() {
               <select
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={itemSpoilageCategory}
-                onChange={(e) => setItemSpoilageCategory(e.target.value)}
+                onChange={(e) => {
+                  setItemSpoilageCategory(e.target.value)
+                  if (e.target.value === 'non_perishable') {
+                    setItemExpiry('')
+                  }
+                }}
               >
                 <option value="non_perishable">غير سريع التلف</option>
                 <option value="perishable">سريع التلف</option>
                 <option value="medical">طبي</option>
               </select>
-              <input
-                type="date"
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                value={itemExpiry}
-                onChange={(e) => setItemExpiry(e.target.value)}
-              />
+              {itemSpoilageCategory !== 'non_perishable' ? (
+                <input
+                  type="date"
+                  className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={itemExpiry}
+                  onChange={(e) => setItemExpiry(e.target.value)}
+                />
+              ) : (
+                <p className="flex items-center rounded-lg border border-dashed border-white/15 px-3 py-2 text-xs text-white/50">
+                  لا يلزم تاريخ انتهاء للمواد غير القابلة للتلف
+                </p>
+              )}
               <input
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 placeholder="موقع التخزين"
@@ -461,45 +425,6 @@ export function StorekeeperInventoryPage() {
               />
               <button type="submit" className="w-full rounded-lg bg-rose-700 py-2.5 font-medium text-white">
                 تأكيد الإخراج
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {showDispenseDialog && selectedItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-emerald-300/25 bg-slate-950 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">صرف دواء بموجب وصفة</h3>
-              <button type="button" onClick={() => setShowDispenseDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white">
-                إغلاق
-              </button>
-            </div>
-            <p className="mb-3 text-xs text-white/60">
-              المادة: {String(selectedItem.name ?? '—')} — الباركود: {String(selectedItem.item_code ?? '—')}
-            </p>
-            <form className="space-y-3" onSubmit={onDispenseByPrescription}>
-              <input
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="كمية الصرف"
-                value={dispenseQty}
-                onChange={(e) => setDispenseQty(e.target.value)}
-              />
-              <input
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="مرجع الوصفة الطبية"
-                value={prescriptionRef}
-                onChange={(e) => setPrescriptionRef(e.target.value)}
-              />
-              <input
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="معرّف/اسم المستفيد (اختياري)"
-                value={dispenseBeneficiary}
-                onChange={(e) => setDispenseBeneficiary(e.target.value)}
-              />
-              <button type="submit" className="w-full rounded-lg bg-emerald-700 py-2.5 font-medium text-white">
-                تأكيد الصرف
               </button>
             </form>
           </div>

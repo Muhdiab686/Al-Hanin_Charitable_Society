@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -74,5 +75,15 @@ class User extends Authenticatable // implements MustVerifyEmail
     public function donorChatMessagesReceived(): HasMany
     {
         return $this->hasMany(DonorChatMessage::class, 'donor_id');
+    }
+
+    public function beneficiaryProfile(): HasOne
+    {
+        return $this->hasOne(Beneficiary::class);
+    }
+
+    public function clinicStaffProfile(): HasOne
+    {
+        return $this->hasOne(ClinicStaffProfile::class);
     }
 }

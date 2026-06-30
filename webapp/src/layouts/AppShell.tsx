@@ -67,7 +67,6 @@ const shells: Record<ShellVariant, ShellBlock> = {
     title: 'مساحة السكرتير',
     links: [
       { to: '/app/secretary', label: 'الرئيسية' },
-      { to: '/app/secretary/beneficiaries', label: 'المستفيدون والعائلات' },
       { to: '/app/secretary/aid-requests', label: 'طلبات المساعدة' },
       { to: '/app/secretary/clinic', label: 'العيادة والمواعيد' },
       { to: '/app/secretary/medical', label: 'السجل الطبي والمختبر' },
@@ -96,6 +95,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
     links: [
       { to: '/app/accountant', label: 'الرئيسية' },
       { to: '/app/accountant/donations', label: 'التبرعات' },
+      { to: '/app/accountant/expenses', label: 'المصروفات التشغيلية' },
       { to: '/app/accountant/campaign-reporting', label: 'تقارير الحملات' },
       { to: '/app/accountant/payouts', label: 'صرف الأطباء' },
     ],

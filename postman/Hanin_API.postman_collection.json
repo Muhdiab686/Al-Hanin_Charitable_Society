@@ -3,7 +3,7 @@
     "_postman_id": "3d9a6a95-7b4b-4e89-a9cc-12dd6adf6b32",
     "name": "Hanin Charity API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "REST API collection for Hanin backend."
+    "description": "REST API collection for Hanin backend — grouped by user role (Admin, Beneficiary, Donor, Secretary, General Secretary, Warehouse Manager, Accountant, Doctor, Volunteer)."
   },
   "variable": [
     {
@@ -98,6 +98,9 @@
                   "const json = pm.response.json();",
                   "if (json.token) {",
                   "  pm.collectionVariables.set('token', json.token);",
+                  "}",
+                  "if (json.beneficiary_id) {",
+                  "  pm.collectionVariables.set('beneficiary_id', json.beneficiary_id);",
                   "}"
                 ]
               }
@@ -1145,6 +1148,189 @@
               }
             ],
             "url": "{{base_url}}/api/v1/finance/summary?from=2026-05-01&to=2026-05-31"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Beneficiary",
+      "description": "Role: beneficiary — dashboard, profile completion, appointments",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/beneficiary/dashboard"
+          }
+        },
+        {
+          "name": "Profile Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/beneficiary/profile-status"
+          }
+        },
+        {
+          "name": "Complete Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"family\": {\n    \"full_family_name\": \"عائلة أحمد\",\n    \"head_name\": \"أحمد محمد\",\n    \"phone\": \"0599000000\",\n    \"province\": \"رام الله\",\n    \"city\": \"البيرة\",\n    \"neighborhood\": \"الوسط\",\n    \"housing_status\": \"rented\",\n    \"total_monthly_income\": 1200\n  },\n  \"members\": [\n    {\n      \"name\": \"أحمد محمد\",\n      \"family_relationship\": \"head\",\n      \"phone\": \"0599000000\"\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/v1/beneficiary/profile/complete"
+          }
+        },
+        {
+          "name": "Request Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requested_specialty\": \"أطفال\",\n  \"reason\": \"متابعة دورية\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/appointments/request"
+          }
+        }
+      ]
+    },
+    {
+      "name": "General Secretary (Recording Secretary)",
+      "description": "Role: recording_secretary — beneficiary management & approval",
+      "item": [
+        {
+          "name": "Onboard Beneficiary (system credentials)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"family\": { \"head_name\": \"عائلة سالم\", \"phone\": \"0599111111\", \"members_count\": 4 },\n  \"head\": { \"name\": \"سالم علي\", \"national_id\": \"ONB-100\" }\n}"
+            },
+            "url": "{{base_url}}/api/v1/beneficiaries/onboard"
+          }
+        },
+        {
+          "name": "Approve Family",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/families/{{family_id}}/approve"
+          }
+        },
+        {
+          "name": "Distribution Plan (filtered)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"قرطاسية للأطفال\",\n  \"aid_type\": \"special_item\",\n  \"distribution_date\": \"2026-07-01\",\n  \"total_units\": 100,\n  \"filter_criteria\": { \"min_school_age_children\": 2 }\n}"
+            },
+            "url": "{{base_url}}/api/v1/aid-distribution-plans"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Donor",
+      "description": "Role: donor — donations, Stripe, chat",
+      "item": [
+        {
+          "name": "Stripe Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50,\n  \"show_donor_name\": true,\n  \"donor_name\": \"متبرع كريم\",\n  \"purpose\": \"دعم عام\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/donations/stripe/checkout"
+          }
+        },
+        {
+          "name": "Chat - Send to Accountant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"استفسار مالي\",\n  \"recipient_role\": \"accountant\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/donor-chat/messages"
+          }
+        },
+        {
+          "name": "Campaigns - Public List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/campaigns"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Warehouse Manager (Storekeeper)",
+      "description": "Role: storekeeper — inventory",
+      "item": [
+        {
+          "name": "Inventory Items",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/inventory-items"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accountant",
+      "description": "Role: accountant — expenses & donor chat",
+      "item": [
+        {
+          "name": "Operational Expenses - List",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/finance/expenses"
+          }
+        },
+        {
+          "name": "Operational Expenses - Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250,\n  \"description\": \"فاتورة كهرباء\",\n  \"vendor\": \"شركة الكهرباء\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/finance/expenses"
           }
         }
       ]

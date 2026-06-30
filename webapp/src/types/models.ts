@@ -14,6 +14,7 @@ export type ApiUser = {
   name: string
   email: string
   role: UserRole
+  beneficiary_id?: number | null
 }
 
 export type AdminDashboardPayload = {

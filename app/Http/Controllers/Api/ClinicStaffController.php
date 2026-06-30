@@ -70,6 +70,8 @@ class ClinicStaffController extends Controller
         $profile = ClinicStaffProfile::query()->updateOrCreate(
             ['user_id' => $user->id],
             [
+                'specialty' => $validated['specialty'] ?? null,
+                'bio' => $validated['bio'] ?? null,
                 'monthly_salary' => $validated['monthly_salary'],
                 'consultation_fee' => $validated['consultation_fee'],
                 'is_active' => $validated['is_active'],

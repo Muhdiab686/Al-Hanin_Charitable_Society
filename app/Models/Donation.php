@@ -23,12 +23,16 @@ class Donation extends Model
         'channel',
         'cash_amount',
         'donor_name',
+        'show_donor_name',
         'donor_phone',
         'notes',
         'purpose',
         'pledge_frequency',
         'receipt_code',
+        'stripe_payment_intent_id',
+        'stripe_checkout_session_id',
         'registered_by',
+        'campaign_id',
     ];
 
     /**
@@ -39,6 +43,7 @@ class Donation extends Model
         return [
             'type' => DonationType::class,
             'cash_amount' => 'decimal:2',
+            'show_donor_name' => 'boolean',
         ];
     }
 
@@ -55,5 +60,10 @@ class Donation extends Model
     public function financialTransactions(): MorphMany
     {
         return $this->morphMany(FinancialTransaction::class, 'reference');
+    }
+
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
     }
 }

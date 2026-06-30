@@ -12,6 +12,7 @@ class DonorChatMessage extends Model
      */
     protected $fillable = [
         'donor_id',
+        'recipient_role',
         'sender_id',
         'body',
     ];

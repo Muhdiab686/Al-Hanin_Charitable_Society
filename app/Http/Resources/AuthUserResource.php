@@ -22,11 +22,14 @@ class AuthUserResource extends JsonResource
             $this->syncRoles([$role]);
         }
 
+        $this->loadMissing('beneficiaryProfile');
+
         return [
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
             'role' => $role,
+            'beneficiary_id' => $this->beneficiaryProfile?->id,
         ];
     }
 }

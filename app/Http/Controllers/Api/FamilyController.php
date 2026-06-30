@@ -38,7 +38,7 @@ class FamilyController extends Controller
             if (! $user?->hasPermissionTo('families.enrollment.review')) {
                 abort(403, 'You are not authorized to approve or reject enrollment.');
             }
-            if ($current !== FamilyEnrollmentStatus::PendingBoard) {
+            if ($current !== FamilyEnrollmentStatus::PendingBoard && $current !== FamilyEnrollmentStatus::UnderReview) {
                 throw ValidationException::withMessages([
                     'enrollment_status' => [__('Only applications awaiting board review can be approved or rejected.')],
                 ]);
@@ -52,6 +52,10 @@ class FamilyController extends Controller
                 FamilyEnrollmentStatus::PendingBoard => in_array($current, [
                     FamilyEnrollmentStatus::Draft,
                     FamilyEnrollmentStatus::Rejected,
+                    FamilyEnrollmentStatus::UnderReview,
+                ], true),
+                FamilyEnrollmentStatus::UnderReview => in_array($current, [
+                    FamilyEnrollmentStatus::Draft,
                 ], true),
                 FamilyEnrollmentStatus::Draft => in_array($current, [
                     FamilyEnrollmentStatus::Draft,

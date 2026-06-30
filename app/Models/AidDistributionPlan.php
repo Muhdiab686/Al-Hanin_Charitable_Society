@@ -21,6 +21,7 @@ class AidDistributionPlan extends Model
         'status',
         'notes',
         'created_by',
+        'filter_criteria',
     ];
 
     /**
@@ -31,6 +32,7 @@ class AidDistributionPlan extends Model
         return [
             'distribution_date' => 'date',
             'total_amount' => 'decimal:2',
+            'filter_criteria' => 'array',
         ];
     }
 

@@ -26,6 +26,12 @@ class StoreAidDistributionPlanRequest extends FormRequest
             'total_amount' => ['nullable', 'numeric', 'min:0.01'],
             'total_units' => ['nullable', 'integer', 'min:1'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'filter_criteria' => ['nullable', 'array'],
+            'filter_criteria.min_children' => ['nullable', 'integer', 'min:0'],
+            'filter_criteria.min_school_age_children' => ['nullable', 'integer', 'min:0'],
+            'filter_criteria.min_family_members' => ['nullable', 'integer', 'min:1'],
+            'filter_criteria.max_monthly_income' => ['nullable', 'numeric', 'min:0'],
+            'filter_criteria.urgent_need' => ['nullable', 'string', 'max:100'],
         ];
     }
 

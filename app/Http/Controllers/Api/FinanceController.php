@@ -78,4 +78,23 @@ class FinanceController extends Controller
             'transaction' => $transaction->fresh()->load(['recorder:id,name,email']),
         ], 201);
     }
+
+    public function operationalExpenses(Request $request): JsonResponse
+    {
+        $query = FinancialTransaction::query()
+            ->where('type', 'expense')
+            ->where('source', 'operational_invoice')
+            ->with(['recorder:id,name,email', 'reference'])
+            ->latest('recorded_at');
+
+        if ($request->filled('from')) {
+            $query->whereDate('recorded_at', '>=', (string) $request->string('from'));
+        }
+
+        if ($request->filled('to')) {
+            $query->whereDate('recorded_at', '<=', (string) $request->string('to'));
+        }
+
+        return response()->json($query->paginate(15));
+    }
 }

@@ -40,5 +40,6 @@ export function normalizeApiUser(raw: Record<string, unknown>): ApiUser {
     name: String(raw.name ?? ''),
     email: String(raw.email ?? ''),
     role: parseRole(raw.role, raw.roles),
+    beneficiary_id: raw.beneficiary_id != null ? Number(raw.beneficiary_id) : null,
   }
 }

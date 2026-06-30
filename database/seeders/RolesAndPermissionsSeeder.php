@@ -50,8 +50,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $rolePermissions = [
             UserRole::Admin->value => $permissions,
             UserRole::Secretary->value => [
-                'beneficiaries.manage',
-                'beneficiaries.view',
                 'aid.request.review',
                 'aid.distribute',
                 'appointments.manage',
@@ -65,6 +63,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'beneficiaries.manage',
                 'beneficiaries.view',
                 'families.enrollment.review',
+                'communications.donor_chat',
                 'aid.request.review',
                 'aid.distribute',
                 'volunteers.manage',
@@ -75,6 +74,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'donations.view',
                 'finance.reports.view',
                 'finance.expenses.manage',
+                'communications.donor_chat',
             ],
             UserRole::Doctor->value => [
                 'appointments.view',

@@ -24,12 +24,26 @@ class Beneficiary extends Model
         'national_id',
         'name',
         'date_of_birth',
+        'age',
         'phone',
+        'additional_phone',
         'status',
         'medical_wallet_balance',
         'is_head_of_family',
         'family_relationship',
         'gender',
+        'marital_status',
+        'education_level',
+        'employment_status',
+        'profession',
+        'workplace',
+        'income_type',
+        'monthly_income',
+        'health_status',
+        'health_details',
+        'is_housewife',
+        'kinship_degree',
+        'orphan_status',
         'notes',
     ];
 
@@ -41,7 +55,9 @@ class Beneficiary extends Model
         return [
             'date_of_birth' => 'date',
             'medical_wallet_balance' => 'decimal:2',
+            'monthly_income' => 'decimal:2',
             'is_head_of_family' => 'boolean',
+            'is_housewife' => 'boolean',
         ];
     }
 

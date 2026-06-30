@@ -32,6 +32,7 @@ import { AdminSystemBackupGuidePage } from './pages/admin/AdminSystemBackupGuide
 import { AdminUsersPage } from './pages/admin/AdminUsersPage'
 import { AccountantDonationsPage } from './pages/accountant/AccountantDonationsPage'
 import { CampaignReportingPage } from './pages/reporting/CampaignReportingPage'
+import { AccountantExpensesPage } from './pages/accountant/AccountantExpensesPage'
 import { AccountantPayoutsPage } from './pages/accountant/AccountantPayoutsPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { LoginPage } from './pages/auth/LoginPage'
@@ -39,6 +40,7 @@ import { BeneficiaryAidPage } from './pages/beneficiary/BeneficiaryAidPage'
 import { BeneficiaryAppointmentsPage } from './pages/beneficiary/BeneficiaryAppointmentsPage'
 import { BeneficiaryHomePage } from './pages/beneficiary/BeneficiaryHomePage'
 import { BeneficiaryMedicalPage } from './pages/beneficiary/BeneficiaryMedicalPage'
+import { BeneficiaryProfilePage } from './pages/beneficiary/BeneficiaryProfilePage'
 import { DoctorAppointmentsPage } from './pages/doctor/DoctorAppointmentsPage'
 import { DoctorHomePage } from './pages/doctor/DoctorHomePage'
 import { DoctorMedicalPage } from './pages/doctor/DoctorMedicalPage'
@@ -139,7 +141,6 @@ export default function App() {
             }
           >
             <Route index element={<SecretaryHomePage />} />
-            <Route path="beneficiaries" element={<SecretaryBeneficiariesPage />} />
             <Route path="aid-requests" element={<SecretaryAidPage />} />
             <Route path="aid-plans" element={<SecretaryAidPlansPage />} />
             <Route path="categories" element={<SecretaryCategoriesPage />} />
@@ -182,6 +183,7 @@ export default function App() {
           >
             <Route index element={<AccountantDashboardPage />} />
             <Route path="donations" element={<AccountantDonationsPage />} />
+            <Route path="expenses" element={<AccountantExpensesPage />} />
             <Route path="campaign-reporting" element={<CampaignReportingPage />} />
             <Route path="payouts" element={<AccountantPayoutsPage />} />
           </Route>
@@ -262,6 +264,7 @@ export default function App() {
             }
           >
             <Route index element={<BeneficiaryHomePage />} />
+            <Route path="profile" element={<BeneficiaryProfilePage />} />
             <Route path="aid" element={<BeneficiaryAidPage />} />
             <Route path="appointments" element={<BeneficiaryAppointmentsPage />} />
             <Route path="medical" element={<BeneficiaryMedicalPage />} />

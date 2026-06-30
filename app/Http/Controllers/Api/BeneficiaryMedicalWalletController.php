@@ -28,6 +28,15 @@ class BeneficiaryMedicalWalletController extends Controller
         ]);
     }
 
+    public function showSelf(Request $request): JsonResponse
+    {
+        $beneficiary = Beneficiary::query()
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        return $this->show($request, $beneficiary);
+    }
+
     public function credit(
         StoreMedicalPrescriptionCreditRequest $request,
         Beneficiary $beneficiary

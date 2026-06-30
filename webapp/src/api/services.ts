@@ -12,9 +12,13 @@ export async function login(payload: {
 }): Promise<{ token: string; user: ApiUser }> {
   const { data } = await apiClient.post<{
     token: string
+    beneficiary_id?: number | null
     user: Record<string, unknown>
   }>(`${v1}/auth/login`, payload)
-  return { token: data.token, user: normalizeApiUser(data.user) }
+  return {
+    token: data.token,
+    user: normalizeApiUser({ ...data.user, beneficiary_id: data.beneficiary_id ?? data.user.beneficiary_id }),
+  }
 }
 
 export async function register(payload: {
@@ -26,9 +30,13 @@ export async function register(payload: {
 }): Promise<{ token: string; user: ApiUser }> {
   const { data } = await apiClient.post<{
     token: string
+    beneficiary_id?: number | null
     user: Record<string, unknown>
   }>(`${v1}/auth/register`, payload)
-  return { token: data.token, user: normalizeApiUser(data.user) }
+  return {
+    token: data.token,
+    user: normalizeApiUser({ ...data.user, beneficiary_id: data.beneficiary_id ?? data.user.beneficiary_id }),
+  }
 }
 
 export async function fetchMe(): Promise<ApiUser> {
@@ -728,12 +736,79 @@ export async function postAdminDonorChatMessage(
   return data
 }
 
-export async function fetchMyDonorChatMessages(): Promise<DonorChatMessageDto[]> {
-  const { data } = await apiClient.get<{ messages: DonorChatMessageDto[] }>(`${v1}/donor-chat/messages`)
+export async function fetchMyDonorChatMessages(recipientRole?: string): Promise<DonorChatMessageDto[]> {
+  const { data } = await apiClient.get<{ messages: DonorChatMessageDto[] }>(`${v1}/donor-chat/messages`, {
+    params: recipientRole ? { recipient_role: recipientRole } : undefined,
+  })
   return data.messages
 }
 
-export async function postMyDonorChatMessage(body: string): Promise<{ message: DonorChatMessageDto }> {
-  const { data } = await apiClient.post<{ message: DonorChatMessageDto }>(`${v1}/donor-chat/messages`, { body })
+export async function postMyDonorChatMessage(
+  body: string,
+  recipientRole: 'accountant' | 'recording_secretary',
+): Promise<{ message: DonorChatMessageDto }> {
+  const { data } = await apiClient.post<{ message: DonorChatMessageDto }>(`${v1}/donor-chat/messages`, {
+    body,
+    recipient_role: recipientRole,
+  })
+  return data
+}
+
+export async function fetchBeneficiaryDashboard(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get(`${v1}/beneficiary/dashboard`)
+  return data
+}
+
+export async function fetchBeneficiaryProfileStatus(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get(`${v1}/beneficiary/profile-status`)
+  return data
+}
+
+export async function completeBeneficiaryProfile(payload: Record<string, unknown>): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/beneficiary/profile/complete`, payload)
+  return data
+}
+
+export async function onboardBeneficiary(payload: Record<string, unknown>): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/beneficiaries/onboard`, payload)
+  return data
+}
+
+export async function approveFamilyBeneficiary(familyId: number): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/families/${familyId}/approve`)
+  return data
+}
+
+export async function fetchOperationalExpenses(params?: {
+  page?: number
+  from?: string
+  to?: string
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(`${v1}/finance/expenses`, { params })
+  return data
+}
+
+export async function fetchCampaigns(): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(`${v1}/campaigns`)
+  return data
+}
+
+export async function createStripeCheckout(payload: {
+  amount: number
+  donor_name?: string
+  show_donor_name?: boolean
+  purpose?: string
+  campaign_id?: number
+}): Promise<{ checkout_url: string; session_id: string; donation_id: number }> {
+  const { data } = await apiClient.post(`${v1}/donations/stripe/checkout`, payload)
+  return data
+}
+
+export async function requestBeneficiaryAppointment(payload: {
+  requested_specialty: string
+  reason?: string
+  preferred_date?: string
+}): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/appointments/request`, payload)
   return data
 }
