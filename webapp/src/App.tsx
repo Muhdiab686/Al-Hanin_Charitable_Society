@@ -45,6 +45,7 @@ import { DoctorAppointmentsPage } from './pages/doctor/DoctorAppointmentsPage'
 import { DoctorHomePage } from './pages/doctor/DoctorHomePage'
 import { DoctorMedicalPage } from './pages/doctor/DoctorMedicalPage'
 import { DoctorPayoutPage } from './pages/doctor/DoctorPayoutPage'
+import { DoctorProfilePage } from './pages/doctor/DoctorProfilePage'
 import { DonorDonationsPage } from './pages/donor/DonorDonationsPage'
 import { DonorChatPage } from './pages/donor/DonorChatPage'
 import { DonorHomePage } from './pages/donor/DonorHomePage'
@@ -69,6 +70,8 @@ import { StorekeeperQrPage } from './pages/storekeeper/StorekeeperQrPage'
 import { VolunteerAidPage } from './pages/volunteer/VolunteerAidPage'
 import { VolunteerHomePage } from './pages/volunteer/VolunteerHomePage'
 import { VolunteerOpportunitiesPage } from './pages/volunteer/VolunteerOpportunitiesPage'
+import { NotificationsPage } from './pages/shared/NotificationsPage'
+import { StaffDonorChatPage } from './pages/shared/StaffDonorChatPage'
 
 export default function App() {
   return (
@@ -149,6 +152,7 @@ export default function App() {
             <Route path="volunteers" element={<SecretaryVolunteersPage />} />
             <Route path="campaign-reporting" element={<CampaignReportingPage />} />
             <Route path="qr" element={<SecretaryQrPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -169,6 +173,8 @@ export default function App() {
             <Route path="volunteers" element={<SecretaryVolunteersPage />} />
             <Route path="campaign-reporting" element={<CampaignReportingPage />} />
             <Route path="qr" element={<SecretaryQrPage />} />
+            <Route path="donor-chat" element={<StaffDonorChatPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -186,6 +192,8 @@ export default function App() {
             <Route path="expenses" element={<AccountantExpensesPage />} />
             <Route path="campaign-reporting" element={<CampaignReportingPage />} />
             <Route path="payouts" element={<AccountantPayoutsPage />} />
+            <Route path="donor-chat" element={<StaffDonorChatPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -199,9 +207,11 @@ export default function App() {
             }
           >
             <Route index element={<DoctorHomePage />} />
+            <Route path="profile" element={<DoctorProfilePage />} />
             <Route path="appointments" element={<DoctorAppointmentsPage />} />
             <Route path="medical" element={<DoctorMedicalPage />} />
             <Route path="payouts" element={<DoctorPayoutPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -220,6 +230,7 @@ export default function App() {
             <Route path="aid" element={<StorekeeperAidPage />} />
             <Route path="plans" element={<StorekeeperPlansPage />} />
             <Route path="qr" element={<StorekeeperQrPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -236,6 +247,7 @@ export default function App() {
             <Route path="chat" element={<DonorChatPage />} />
             <Route path="donations" element={<DonorDonationsPage />} />
             <Route path="urgent-aid" element={<DonorUrgentAidPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -251,6 +263,7 @@ export default function App() {
             <Route index element={<VolunteerHomePage />} />
             <Route path="aid" element={<VolunteerAidPage />} />
             <Route path="opportunities" element={<VolunteerOpportunitiesPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route
@@ -268,6 +281,7 @@ export default function App() {
             <Route path="aid" element={<BeneficiaryAidPage />} />
             <Route path="appointments" element={<BeneficiaryAppointmentsPage />} />
             <Route path="medical" element={<BeneficiaryMedicalPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

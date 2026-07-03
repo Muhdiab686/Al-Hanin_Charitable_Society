@@ -111,9 +111,12 @@ class StripeDonationController extends Controller
             ]);
 
             if ($donation->campaign_id) {
-                Campaign::query()
-                    ->whereKey($donation->campaign_id)
-                    ->increment('raised_amount', $donation->cash_amount);
+                $campaign = Campaign::query()->whereKey($donation->campaign_id)->first();
+                if ($campaign !== null) {
+                    $campaign->increment('raised_amount', (float) $donation->cash_amount);
+                    $campaign->refresh();
+                    $campaign->autoCompleteIfEligible();
+                }
             }
         }
 

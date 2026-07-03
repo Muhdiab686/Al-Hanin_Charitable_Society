@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateDoctorClinicProfileRequest;
 use App\Http\Requests\UpsertClinicStaffProfileRequest;
 use App\Models\ClinicStaffProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ClinicStaffController extends Controller
@@ -72,6 +74,7 @@ class ClinicStaffController extends Controller
             [
                 'specialty' => $validated['specialty'] ?? null,
                 'bio' => $validated['bio'] ?? null,
+                'available_days' => $validated['available_days'] ?? null,
                 'monthly_salary' => $validated['monthly_salary'],
                 'consultation_fee' => $validated['consultation_fee'],
                 'is_active' => $validated['is_active'],
@@ -81,6 +84,40 @@ class ClinicStaffController extends Controller
         return response()->json([
             'message' => __('Clinic staff profile saved successfully.'),
             'profile' => $profile->load('user:id,name,email,role'),
+        ]);
+    }
+
+    public function showMine(Request $request): JsonResponse
+    {
+        $profile = ClinicStaffProfile::query()
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        return response()->json([
+            'profile' => $profile,
+        ]);
+    }
+
+    public function updateMine(UpdateDoctorClinicProfileRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $profile = ClinicStaffProfile::query()->firstOrNew([
+            'user_id' => $request->user()->id,
+        ]);
+
+        $profile->forceFill([
+            'specialty' => $validated['specialty'],
+            'bio' => $validated['bio'] ?? null,
+            'available_days' => $validated['available_days'],
+            'consultation_fee' => $validated['consultation_fee'],
+            'is_active' => true,
+            'monthly_salary' => $profile->exists ? $profile->monthly_salary : 0,
+        ])->save();
+
+        return response()->json([
+            'message' => __('Doctor profile updated successfully.'),
+            'profile' => $profile->fresh()->load('user:id,name,email,role'),
         ]);
     }
 }

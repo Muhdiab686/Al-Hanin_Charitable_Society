@@ -2,7 +2,6 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
-import type { Paginated } from '../../types/models'
 
 function labelActivityKind(v: string): string {
   if (v === 'awareness') {
@@ -18,6 +17,7 @@ function labelStatus(st: string): string {
 
 export function SecretaryVolunteersPage() {
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
+  const [beneficiaries, setBeneficiaries] = useState<Record<string, unknown>[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [title, setTitle] = useState('فرصة جديدة')
@@ -26,15 +26,18 @@ export function SecretaryVolunteersPage() {
   const [starts, setStarts] = useState(() => new Date().toISOString().slice(0, 16))
   const [editId, setEditId] = useState('')
   const [status, setStatus] = useState('open')
-  const [delId, setDelId] = useState('')
   const [linkOppId, setLinkOppId] = useState('')
-  const [linkBeneficiaryCsv, setLinkBeneficiaryCsv] = useState('')
+  const [selectedLinkBeneficiaryIds, setSelectedLinkBeneficiaryIds] = useState<string[]>([])
 
   async function load() {
     setErr(null)
     try {
-      const res = (await api.fetchVolunteerOpportunities({ page: 1 })) as Paginated<Record<string, unknown>>
+      const [res, ben] = await Promise.all([
+        api.fetchVolunteerOpportunities({ page: 1 }),
+        api.fetchBeneficiaries({ page: 1 }),
+      ])
       setRows((res.data as Record<string, unknown>[]) ?? [])
+      setBeneficiaries((ben.data as Record<string, unknown>[]) ?? [])
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر التحميل'))
     }
@@ -76,13 +79,15 @@ export function SecretaryVolunteersPage() {
     }
   }
 
-  async function onDelete(e: FormEvent) {
-    e.preventDefault()
+  async function onDeleteByRow(opportunityId: number) {
     setMsg(null)
     setErr(null)
     try {
-      await api.deleteVolunteerOpportunity(Number(delId))
+      await api.deleteVolunteerOpportunity(opportunityId)
       setMsg('تم الحذف.')
+      if (editId === String(opportunityId)) {
+        setEditId('')
+      }
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex, 'فشل الحذف'))
@@ -94,14 +99,10 @@ export function SecretaryVolunteersPage() {
     setMsg(null)
     setErr(null)
     try {
-      const ids = linkBeneficiaryCsv
-        .split(/[\s,;]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((x) => Number.parseInt(x, 10))
+      const ids = selectedLinkBeneficiaryIds.map((id) => Number.parseInt(id, 10))
 
-      if (!linkOppId.trim() || ids.some((id) => !Number.isFinite(id))) {
-        throw new Error('يجب تحديد معرّف فرصة وقائمة أرقام مستفيدين صالحة.')
+      if (!linkOppId.trim() || ids.length === 0 || ids.some((id) => !Number.isFinite(id))) {
+        throw new Error('يجب اختيار فرصة ومستفيد واحد على الأقل.')
       }
 
       await api.syncVolunteerOpportunityLinkedBeneficiaries(Number(linkOppId.trim()), ids)
@@ -111,6 +112,10 @@ export function SecretaryVolunteersPage() {
       setErr(extractErrorMessage(ex as Error, 'تعذّر الربط'))
     }
   }
+
+  const awarenessOptions = rows.filter(
+    (opportunity) => String((opportunity as { activity_kind?: string }).activity_kind ?? 'general') === 'awareness',
+  )
 
   return (
     <div className="space-y-6 text-sm">
@@ -129,9 +134,30 @@ export function SecretaryVolunteersPage() {
       </p>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <h2 className="text-base font-semibold text-white">الفرص</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-white">الفرص</h2>
+          <div className="grid w-full gap-2 md:w-auto md:grid-cols-1">
+            <form className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-black/20 p-2" onSubmit={onUpdate}>
+              <div className="min-w-[240px] rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-xs text-white/80">
+                {editId ? `الفرصة المحددة: #${editId}` : 'اختر فرصة بالنقر على الصف'}
+              </div>
+              <select
+                className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                disabled={!editId}
+              >
+                <option value="open">مفتوحة</option>
+                <option value="closed">مغلقة</option>
+              </select>
+              <button type="submit" disabled={!editId} className="rounded-lg bg-white/15 px-3 py-2 text-white disabled:opacity-40">
+                تحديث
+              </button>
+            </form>
+          </div>
+        </div>
         <div className="mt-3 overflow-x-auto rounded-xl border border-white/[0.06]">
-          <table className="w-full min-w-[720px] border-collapse text-start text-xs">
+          <table className="w-full min-w-[980px] border-collapse text-start text-xs">
             <thead>
               <tr className="border-b border-white/10 bg-black/30 text-[11px] uppercase tracking-wide text-white/45">
                 <th className="px-3 py-2 font-semibold">#</th>
@@ -140,22 +166,54 @@ export function SecretaryVolunteersPage() {
                 <th className="px-3 py-2 font-semibold">الحالة</th>
                 <th className="px-3 py-2 font-semibold">متطوعون</th>
                 <th className="px-3 py-2 font-semibold">مستفيدون مرتبطون</th>
+                <th className="px-3 py-2 font-semibold">أسماء المستفيدين المرتبطين</th>
+                <th className="px-3 py-2 font-semibold">حذف</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => {
                 const kind = String((r as { activity_kind?: string }).activity_kind ?? 'general')
+                const rowStatus = String(r.status ?? 'open')
                 const regCount = Number((r as { registrations_count?: number }).registrations_count ?? 0)
                 const linked = Number((r as { linked_beneficiaries_count?: number }).linked_beneficiaries_count ?? 0)
+                const linkedNames = ((r as { linked_beneficiaries?: Array<{ name?: string }> }).linked_beneficiaries ?? [])
+                  .map((beneficiary) => String(beneficiary.name ?? '').trim())
+                  .filter(Boolean)
+                const selected = editId === String(r.id)
 
                 return (
-                  <tr key={String(r.id)} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/15' : ''}`}>
+                  <tr
+                    key={String(r.id)}
+                    className={`cursor-pointer border-b border-white/[0.06] ${selected ? 'bg-violet-500/20' : idx % 2 === 0 ? 'bg-black/15' : ''}`}
+                    onClick={() => {
+                      setEditId(String(r.id))
+                      setStatus(rowStatus === 'closed' ? 'closed' : 'open')
+                    }}
+                  >
                     <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-white">{String(r.id)}</td>
                     <td className="px-3 py-2 text-white/88">{String(r.title)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-white/75">{labelActivityKind(kind)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-white/75">{labelStatus(String(r.status))}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-white/75">{labelStatus(rowStatus)}</td>
                     <td className="whitespace-nowrap px-3 py-2 tabular-nums text-white/70">{regCount}</td>
                     <td className="whitespace-nowrap px-3 py-2 tabular-nums text-teal-200/90">{linked}</td>
+                    <td className="max-w-[320px] px-3 py-2 text-white/65">
+                      {linkedNames.length > 0 ? linkedNames.join('، ') : '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-rose-700 px-3 py-1.5 text-white"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (!window.confirm('هل تريد حذف هذه الفرصة؟')) {
+                            return
+                          }
+                          void onDeleteByRow(Number(r.id))
+                        }}
+                      >
+                        حذف
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
@@ -203,59 +261,37 @@ export function SecretaryVolunteersPage() {
       <section className="rounded-2xl border border-teal-500/25 bg-teal-950/15 p-5">
         <h2 className="text-base font-semibold text-white">ربط مستفيدين بنشاط توعية</h2>
         <p className="mt-1 text-[11px] leading-relaxed text-white/55">
-          صالح فقط لفرص مُعرَّفة كـ«توعية». أدخل أرقام المستفيدين مفصولة بفواصل أو مسافات.
+          صالح فقط لفرص مُعرَّفة كـ«توعية». اختر المستفيدين من القائمة.
         </p>
         <form className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" onSubmit={onLinkBeneficiaries}>
-          <input
-            className="w-28 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="رقم الفرصة"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={linkOppId}
             onChange={(e) => setLinkOppId(e.target.value)}
-          />
-          <input
-            className="min-w-[220px] flex-1 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="مثال: 1، 2، 5"
-            value={linkBeneficiaryCsv}
-            onChange={(e) => setLinkBeneficiaryCsv(e.target.value)}
-          />
+          >
+            <option value="">اختر فرصة التوعية</option>
+            {awarenessOptions.map((opportunity) => (
+              <option key={String(opportunity.id)} value={String(opportunity.id)}>
+                #{String(opportunity.id)} — {String(opportunity.title ?? 'فرصة')}
+              </option>
+            ))}
+          </select>
+          <select
+            multiple
+            className="min-h-[120px] min-w-[320px] flex-1 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+            value={selectedLinkBeneficiaryIds}
+            onChange={(e) =>
+              setSelectedLinkBeneficiaryIds(Array.from(e.target.selectedOptions).map((option) => option.value))
+            }
+          >
+            {beneficiaries.map((beneficiary) => (
+              <option key={String(beneficiary.id)} value={String(beneficiary.id)}>
+                #{String(beneficiary.id)} — {String(beneficiary.name ?? 'مستفيد')}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 text-white">
             حفظ الربط
-          </button>
-        </form>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <h2 className="text-base font-semibold text-white">تعديل حالة (مثلاً إغلاق)</h2>
-        <form className="mt-3 flex flex-wrap gap-2" onSubmit={onUpdate}>
-          <input
-            className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="id"
-            value={editId}
-            onChange={(e) => setEditId(e.target.value)}
-          />
-          <select
-            className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="open">مفتوحة</option>
-            <option value="closed">مغلقة</option>
-          </select>
-          <button type="submit" className="rounded-lg bg-white/15 px-3 py-2">
-            تحديث
-          </button>
-        </form>
-      </section>
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <h2 className="text-base font-semibold text-white">حذف فرصة</h2>
-        <form className="mt-3 flex gap-2" onSubmit={onDelete}>
-          <input
-            className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            value={delId}
-            onChange={(e) => setDelId(e.target.value)}
-          />
-          <button type="submit" className="rounded-lg bg-rose-700 px-3 py-2">
-            حذف
           </button>
         </form>
       </section>

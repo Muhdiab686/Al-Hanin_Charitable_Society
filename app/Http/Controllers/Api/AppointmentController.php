@@ -7,12 +7,17 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ApproveClinicAppointmentRequest;
 use App\Http\Requests\CancelClinicAppointmentRequest;
+use App\Http\Requests\ProposeClinicAppointmentRescheduleRequest;
 use App\Http\Requests\RequestClinicAppointmentRequest;
+use App\Http\Requests\RespondClinicAppointmentRescheduleRequest;
 use App\Http\Requests\StoreClinicAppointmentRequest;
 use App\Models\Beneficiary;
 use App\Models\ClinicAppointment;
+use App\Models\ClinicStaffProfile;
+use App\Services\AppNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
 {
@@ -31,6 +36,10 @@ class AppointmentController extends Controller
             } else {
                 $query->whereRaw('1 = 0');
             }
+        }
+
+        if ($user->role === UserRole::Doctor) {
+            $query->where('doctor_id', $user->id);
         }
 
         if ($request->filled('from')) {
@@ -77,17 +86,25 @@ class AppointmentController extends Controller
         ], 201);
     }
 
-    public function requestAppointment(RequestClinicAppointmentRequest $request): JsonResponse
+    public function requestAppointment(RequestClinicAppointmentRequest $request, AppNotificationService $notifier): JsonResponse
     {
         $beneficiary = Beneficiary::query()
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
         $validated = $request->validated();
+        $doctorProfile = ClinicStaffProfile::query()
+            ->where('user_id', $validated['doctor_id'])
+            ->where('is_active', true)
+            ->first();
+        abort_if($doctorProfile === null, 422, 'The selected doctor is not active in clinic staff.');
+        if ($doctorProfile->specialty !== null && $doctorProfile->specialty !== $validated['requested_specialty']) {
+            abort(422, 'The selected doctor does not match the requested specialty.');
+        }
 
         $appointment = ClinicAppointment::query()->create([
             'beneficiary_id' => $beneficiary->id,
-            'doctor_id' => null,
+            'doctor_id' => $validated['doctor_id'],
             'created_by' => $request->user()->id,
             'scheduled_at' => $validated['preferred_date'] ?? now()->addDays(3),
             'status' => 'pending',
@@ -96,14 +113,43 @@ class AppointmentController extends Controller
             'reason' => $validated['reason'] ?? null,
         ]);
 
+        $notifier->notifyRoles(
+            ['secretary', 'recording_secretary', 'admin'],
+            'طلب موعد طبي جديد',
+            'تم إرسال طلب موعد طبي جديد ويحتاج المراجعة.',
+            '/app/secretary/clinic',
+            ['appointment_id' => $appointment->id, 'beneficiary_id' => $beneficiary->id]
+        );
+
         return response()->json([
             'message' => __('Appointment request submitted. The secretariat will review and schedule it.'),
             'appointment' => $appointment->load('beneficiary.family'),
         ], 201);
     }
 
-    public function approve(ApproveClinicAppointmentRequest $request, ClinicAppointment $appointment): JsonResponse
+    public function doctorsCatalog(Request $request): JsonResponse
     {
+        $query = ClinicStaffProfile::query()
+            ->with('user:id,name,email,role')
+            ->where('is_active', true)
+            ->whereHas('user', fn ($userQuery) => $userQuery->where('role', UserRole::Doctor->value))
+            ->orderBy('specialty')
+            ->orderBy('id');
+
+        if ($request->filled('specialty')) {
+            $query->where('specialty', (string) $request->string('specialty'));
+        }
+
+        return response()->json([
+            'doctors' => $query->get(),
+        ]);
+    }
+
+    public function approve(
+        ApproveClinicAppointmentRequest $request,
+        ClinicAppointment $appointment,
+        AppNotificationService $notifier
+    ): JsonResponse {
         abort_unless(
             $appointment->workflow_status === AppointmentWorkflowStatus::PendingApproval->value,
             422,
@@ -120,6 +166,15 @@ class AppointmentController extends Controller
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ])->save();
+
+        $beneficiaryUser = $appointment->beneficiary?->user;
+        $notifier->notifyUser(
+            $beneficiaryUser,
+            'تمت الموافقة على الموعد الطبي',
+            'تمت جدولة موعدك الطبي بنجاح.',
+            '/app/beneficiary/appointments',
+            ['appointment_id' => $appointment->id]
+        );
 
         return response()->json([
             'message' => __('Appointment approved and scheduled successfully.'),
@@ -145,6 +200,103 @@ class AppointmentController extends Controller
 
         return response()->json([
             'message' => __('Appointment cancelled successfully.'),
+            'appointment' => $appointment->fresh()->load(['beneficiary.family', 'doctor:id,name,email']),
+        ]);
+    }
+
+    public function proposeReschedule(
+        ProposeClinicAppointmentRescheduleRequest $request,
+        ClinicAppointment $appointment,
+        AppNotificationService $notifier
+    ): JsonResponse {
+        abort_unless(
+            in_array($appointment->workflow_status, [
+                AppointmentWorkflowStatus::PendingApproval->value,
+                AppointmentWorkflowStatus::Scheduled->value,
+            ], true),
+            422,
+            __('Only pending or scheduled appointments can be rescheduled.'),
+        );
+
+        $validated = $request->validated();
+
+        $appointment->forceFill([
+            'doctor_id' => $validated['doctor_id'],
+            'proposed_scheduled_at' => $validated['scheduled_at'],
+            'proposal_note' => $validated['proposal_note'] ?? null,
+            'status' => 'pending',
+            'workflow_status' => AppointmentWorkflowStatus::RescheduleProposed->value,
+            'proposed_by' => $request->user()->id,
+            'proposal_responded_at' => null,
+        ])->save();
+
+        $notifier->notifyUser(
+            $appointment->beneficiary?->user,
+            'اقتراح تعديل موعد طبي',
+            'تم إرسال وقت بديل لموعدك الطبي، يرجى قبول أو رفض التعديل.',
+            '/app/beneficiary/appointments',
+            ['appointment_id' => $appointment->id]
+        );
+
+        return response()->json([
+            'message' => __('Reschedule proposal sent to beneficiary.'),
+            'appointment' => $appointment->fresh()->load(['beneficiary.family', 'doctor:id,name,email']),
+        ]);
+    }
+
+    public function respondReschedule(
+        RespondClinicAppointmentRescheduleRequest $request,
+        ClinicAppointment $appointment,
+        AppNotificationService $notifier
+    ): JsonResponse {
+        $beneficiary = Beneficiary::query()->where('user_id', $request->user()->id)->firstOrFail();
+
+        if ((int) $appointment->beneficiary_id !== (int) $beneficiary->id) {
+            abort(403);
+        }
+
+        if ($appointment->workflow_status !== AppointmentWorkflowStatus::RescheduleProposed->value) {
+            throw ValidationException::withMessages([
+                'appointment' => [__('There is no pending reschedule proposal for this appointment.')],
+            ]);
+        }
+
+        $decision = $request->validated('decision');
+        if ($decision === 'accepted') {
+            $appointment->forceFill([
+                'scheduled_at' => $appointment->proposed_scheduled_at,
+                'status' => 'scheduled',
+                'workflow_status' => AppointmentWorkflowStatus::Scheduled->value,
+                'approved_by' => $appointment->proposed_by,
+                'approved_at' => now(),
+                'proposal_responded_at' => now(),
+                'proposed_scheduled_at' => null,
+                'proposal_note' => null,
+            ])->save();
+        } else {
+            $appointment->forceFill([
+                'status' => 'pending',
+                'workflow_status' => AppointmentWorkflowStatus::PendingApproval->value,
+                'proposal_responded_at' => now(),
+                'proposed_scheduled_at' => null,
+                'proposal_note' => null,
+            ])->save();
+        }
+
+        $notifier->notifyRoles(
+            ['secretary', 'recording_secretary', 'admin'],
+            'رد على اقتراح تعديل الموعد',
+            $decision === 'accepted'
+                ? 'قام المستفيد بقبول الوقت البديل للموعد.'
+                : 'قام المستفيد برفض الوقت البديل للموعد.',
+            '/app/secretary/clinic',
+            ['appointment_id' => $appointment->id]
+        );
+
+        return response()->json([
+            'message' => $decision === 'accepted'
+                ? __('Appointment reschedule accepted.')
+                : __('Appointment reschedule rejected.'),
             'appointment' => $appointment->fresh()->load(['beneficiary.family', 'doctor:id,name,email']),
         ]);
     }

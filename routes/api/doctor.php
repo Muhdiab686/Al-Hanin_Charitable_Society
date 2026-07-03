@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AppointmentController;
+use App\Http\Controllers\Api\ClinicStaffController;
 use App\Http\Controllers\Api\DoctorPayoutController;
 use App\Http\Controllers\Api\MedicalRecordController;
 use Illuminate\Support\Facades\Route;
@@ -20,4 +21,7 @@ Route::prefix('v1/doctor')->middleware(['auth:sanctum', 'role:doctor'])->group(f
         ->middleware('permission:medical.records.manage');
     Route::post('/payout-requests', [DoctorPayoutController::class, 'store'])
         ->middleware('permission:medical.records.manage');
+
+    Route::get('/profile', [ClinicStaffController::class, 'showMine']);
+    Route::put('/profile', [ClinicStaffController::class, 'updateMine']);
 });

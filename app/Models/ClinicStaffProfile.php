@@ -14,6 +14,7 @@ class ClinicStaffProfile extends Model
         'user_id',
         'specialty',
         'bio',
+        'available_days',
         'monthly_salary',
         'consultation_fee',
         'is_active',
@@ -25,6 +26,7 @@ class ClinicStaffProfile extends Model
     protected function casts(): array
     {
         return [
+            'available_days' => 'array',
             'monthly_salary' => 'decimal:2',
             'consultation_fee' => 'decimal:2',
             'is_active' => 'boolean',

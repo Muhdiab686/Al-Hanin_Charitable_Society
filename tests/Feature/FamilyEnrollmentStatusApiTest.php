@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\UserRole;
+use App\Models\Beneficiary;
 use App\Models\Family;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -181,5 +182,39 @@ class FamilyEnrollmentStatusApiTest extends TestCase
             ['enrollment_status' => 'draft'],
             ['Authorization' => 'Bearer '.$token]
         )->assertForbidden();
+    }
+
+    public function test_approving_family_generates_credentials_when_head_has_no_user_account(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin->value]);
+        $admin->syncRoles([UserRole::Admin->value]);
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::PendingBoard,
+        ]);
+        $head = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'user_id' => null,
+            'is_head_of_family' => true,
+            'name' => 'Head Of Family',
+        ]);
+
+        $token = $admin->createToken('test-device')->plainTextToken;
+
+        $response = $this->patchJson(
+            '/api/v1/families/'.$family->id.'/enrollment-status',
+            ['enrollment_status' => 'approved'],
+            ['Authorization' => 'Bearer '.$token]
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('family.enrollment_status', 'approved')
+            ->assertJsonPath('credentials.email', fn ($email): bool => is_string($email) && str_contains($email, '@'));
+
+        $this->assertDatabaseHas('beneficiaries', [
+            'id' => $head->id,
+            'status' => 'active',
+        ]);
+        $this->assertNotNull($head->fresh()->user_id);
+        $this->assertTrue((bool) $family->fresh()->system_generated_credentials);
     }
 }

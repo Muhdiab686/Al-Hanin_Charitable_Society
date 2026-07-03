@@ -31,6 +31,13 @@ export function SecretaryAidPage() {
   const [pubTitle, setPubTitle] = useState('')
   const [pubSummary, setPubSummary] = useState('')
 
+  const reviewableOptions = rows.filter((row) => {
+    const status = String(row.status ?? '')
+    return status === 'pending' || status === 'submitted' || status === 'under_review'
+  })
+
+  const publishableOptions = rows.filter((row) => String(row.status ?? '') === 'approved')
+
   const load = useCallback(async () => {
     setLoading(true)
     setErr(null)
@@ -150,11 +157,24 @@ export function SecretaryAidPage() {
                 rows.map((r, idx) => {
                   const st = String(r.status ?? '')
                   const tp = String((r as { type?: string }).type ?? '')
+                  const canReview = st === 'pending' || st === 'submitted' || st === 'under_review'
+                  const canPublish = st === 'approved'
 
                   return (
                     <tr
                       key={String(r.id)}
-                      className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/15' : 'bg-transparent'}`}
+                      className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/15' : 'bg-transparent'} ${
+                        canReview || canPublish ? 'cursor-pointer hover:bg-white/10' : ''
+                      }`}
+                      onClick={() => {
+                        if (canReview) {
+                          setReviewId(String(r.id))
+                          setMsg('تم اختيار الطلب للمراجعة. حدّد القرار ثم اضغط إرسال القرار.')
+                        }
+                        if (canPublish) {
+                          setPublishId(String(r.id))
+                        }
+                      }}
                     >
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[13px] tabular-nums text-white">
                         #{String(r.id)}
@@ -181,14 +201,20 @@ export function SecretaryAidPage() {
       </section>
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">مراجعة طلب</h2>
-        <p className="mt-1 text-xs text-white/48">أدخل رقم الطلب ثم اختر القرار والملاحظات إن وجدت.</p>
+        <p className="mt-1 text-xs text-white/48">اختر الطلب ثم حدّد القرار والملاحظات إن وجدت.</p>
         <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={onReview}>
-          <input
-            className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 font-mono text-white"
-            placeholder="رقم الطلب"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 font-mono text-white"
             value={reviewId}
             onChange={(e) => setReviewId(e.target.value)}
-          />
+          >
+            <option value="">اختر الطلب</option>
+            {reviewableOptions.map((row) => (
+              <option key={String(row.id)} value={String(row.id)}>
+                #{String(row.id)} — {beneficiaryLabel(row)} — {labelAidTypeAr(String((row as { type?: string }).type ?? ''))}
+              </option>
+            ))}
+          </select>
           <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={decision}
@@ -215,12 +241,19 @@ export function SecretaryAidPage() {
         </p>
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onPublish}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">رقم الطلب المعتمد</span>
-            <input
+            <span className="text-[11px] text-white/55">الطلب المعتمد</span>
+            <select
               className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 font-mono text-white"
               value={publishId}
               onChange={(e) => setPublishId(e.target.value)}
-            />
+            >
+              <option value="">اختر الطلب المعتمد</option>
+              {publishableOptions.map((row) => (
+                <option key={String(row.id)} value={String(row.id)}>
+                  #{String(row.id)} — {beneficiaryLabel(row)} — {labelAidTypeAr(String((row as { type?: string }).type ?? ''))}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-[11px] text-white/55">عنوان عام للمتبرعين</span>

@@ -1,9 +1,19 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 
+type PayoutRow = {
+  id: number
+  status: string
+  amount: string | number
+  consultations_count?: number
+  base_salary_amount?: string | number
+  consultation_fee_amount?: string | number
+  consultations_amount?: string | number
+}
+
 export function AccountantPayoutsPage() {
-  const [rows, setRows] = useState<Record<string, unknown>[]>([])
+  const [rows, setRows] = useState<PayoutRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [reviewId, setReviewId] = useState('')
@@ -13,8 +23,8 @@ export function AccountantPayoutsPage() {
   async function load() {
     setErr(null)
     try {
-      const res = await api.fetchDoctorPayoutRequests({ page: 1 })
-      setRows((res.data as Record<string, unknown>[]) ?? [])
+      const res = await api.fetchDoctorPayoutRequests({ page: 1, status: 'pending' })
+      setRows((res.data as PayoutRow[]) ?? [])
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر التحميل'))
     }
@@ -23,6 +33,15 @@ export function AccountantPayoutsPage() {
   useEffect(() => {
     void load()
   }, [])
+
+  const reviewOptions = useMemo(
+    () =>
+      rows.map((row) => ({
+        id: String(row.id),
+        label: `#${String(row.id)} — مبلغ ${String(row.amount ?? '—')}`,
+      })),
+    [rows],
+  )
 
   async function onReview(e: FormEvent) {
     e.preventDefault()
@@ -57,7 +76,14 @@ export function AccountantPayoutsPage() {
         <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto text-xs">
           {rows.map((r) => (
             <li key={String(r.id)} className="rounded-lg bg-black/30 px-3 py-2">
-              #{String(r.id)} — {String(r.status ?? '')} — مبلغ {String(r.amount ?? '—')}
+              <div>
+                #{String(r.id)} — مبلغ {String(r.amount ?? '—')}
+              </div>
+              <div className="mt-1 text-[11px] text-white/70">
+                الراتب {String(r.base_salary_amount ?? '0')} + ({String(r.consultations_count ?? 0)} ×{' '}
+                {String(r.consultation_fee_amount ?? '0')}) = {String(r.consultations_amount ?? '0')} — الإجمالي{' '}
+                {String(r.amount ?? '0')}
+              </div>
             </li>
           ))}
         </ul>
@@ -66,12 +92,19 @@ export function AccountantPayoutsPage() {
         <h2 className="text-base font-semibold text-white">مراجعة طلب صرف</h2>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={onReview}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">رقم الطلب</span>
-            <input
-              className="w-28 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 font-mono text-white"
+            <span className="text-[11px] text-white/55">الطلب</span>
+            <select
+              className="min-w-[280px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 font-mono text-white"
               value={reviewId}
               onChange={(e) => setReviewId(e.target.value)}
-            />
+            >
+              <option value="">اختر طلب صرف</option>
+              {reviewOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] text-white/55">القرار</span>

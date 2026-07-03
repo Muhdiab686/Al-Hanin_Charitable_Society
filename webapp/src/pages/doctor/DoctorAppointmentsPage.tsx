@@ -98,6 +98,13 @@ export function DoctorAppointmentsPage() {
       return
     }
 
+    const hasPrescription = prescription.trim().length > 0
+    const hasPrescriptionCost = prescriptionCost.trim().length > 0
+    if (hasPrescription !== hasPrescriptionCost) {
+      setErr('عند إدخال وصفة يجب إدخال تكلفة الوصفة أيضًا (والعكس صحيح) حتى تظهر للسكرتارية.')
+      return
+    }
+
     try {
       await api.createMedicalRecord({
         clinic_appointment_id: Number(selectedAppointment.id),
@@ -256,6 +263,9 @@ export function DoctorAppointmentsPage() {
                 value={prescription}
                 onChange={(e) => setPrescription(e.target.value)}
               />
+              <p className="sm:col-span-2 text-[11px] text-white/55">
+                ملاحظة: كي تدخل الحالة مسار الموافقة المالية، يجب إدخال الوصفة وتكلفتها معًا.
+              </p>
               <input
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 placeholder="تكلفة الوصفة (اختياري)"

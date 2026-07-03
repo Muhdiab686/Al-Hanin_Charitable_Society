@@ -64,11 +64,18 @@ export function VolunteerOpportunitiesPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="font-semibold text-white">التسجيل في فرصة</h2>
         <form className="mt-3 flex gap-2" onSubmit={onReg}>
-          <input
-            className="w-28 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={regId}
             onChange={(e) => setRegId(e.target.value)}
-          />
+          >
+            <option value="">اختر فرصة</option>
+            {rows.map((opportunity) => (
+              <option key={String(opportunity.id)} value={String(opportunity.id)}>
+                #{String(opportunity.id)} — {String(opportunity.title ?? 'فرصة')}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="rounded-lg bg-emerald-500 px-4 py-2 text-slate-900">
             تسجيل
           </button>

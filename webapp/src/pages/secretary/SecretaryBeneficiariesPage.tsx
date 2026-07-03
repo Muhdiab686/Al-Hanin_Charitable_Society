@@ -1,8 +1,7 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import type { Paginated } from '../../types/models'
-import { labelFamilyRelationshipAr } from '../../lib/operationalLabels'
 
 const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'draft', label: 'مسودة' },
@@ -13,6 +12,7 @@ const ENROLL_AR: { value: string; label: string }[] = [
 ]
 
 export function SecretaryBeneficiariesPage() {
+  const CREDENTIALS_CACHE_KEY = 'hanin_generated_family_credentials'
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [page, setPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
@@ -64,13 +64,58 @@ export function SecretaryBeneficiariesPage() {
 
   const [qrFamilyId, setQrFamilyId] = useState('')
   const [qrImg, setQrImg] = useState<string | null>(null)
+  const [historyFamilyId, setHistoryFamilyId] = useState('')
+  const [historySummary, setHistorySummary] = useState<Record<string, unknown> | null>(null)
+  const [historyAidRequests, setHistoryAidRequests] = useState<Record<string, unknown>[]>([])
+  const [historyMedicalRecords, setHistoryMedicalRecords] = useState<Record<string, unknown>[]>([])
 
-  const [memberFamId, setMemberFamId] = useState('')
-  const [memberName, setMemberName] = useState('')
-  const [memberNid, setMemberNid] = useState('')
-  const [memberRel, setMemberRel] = useState('spouse')
-  const [memberGender, setMemberGender] = useState('')
-  const [familyMembers, setFamilyMembers] = useState<Record<string, unknown>[]>([])
+  const [createMembers, setCreateMembers] = useState<
+    Array<{ national_id: string; name: string; family_relationship: string; gender: string }>
+  >([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
+  const [generatedCredentials, setGeneratedCredentials] = useState<Record<number, { email: string; password: string }>>(() => {
+    if (typeof window === 'undefined') {
+      return {}
+    }
+
+    try {
+      const raw = window.localStorage.getItem(CREDENTIALS_CACHE_KEY)
+      if (!raw) {
+        return {}
+      }
+      const parsed = JSON.parse(raw) as Record<string, { email?: string; password?: string }>
+      const normalized: Record<number, { email: string; password: string }> = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        const familyId = Number(key)
+        if (Number.isFinite(familyId) && value?.email && value?.password) {
+          normalized[familyId] = { email: value.email, password: value.password }
+        }
+      }
+      return normalized
+    } catch {
+      return {}
+    }
+  })
+
+  const familyOptions = useMemo(() => {
+    const map = new Map<number, { id: number; label: string }>()
+    for (const row of rows) {
+      const family = row.family as { id?: number; family_code?: string; head_name?: string } | undefined
+      if (family?.id && !map.has(family.id)) {
+        map.set(family.id, {
+          id: family.id,
+          label: `${family.family_code ?? `FAM-${family.id}`} — ${family.head_name ?? 'عائلة'}`,
+        })
+      }
+    }
+    return Array.from(map.values())
+  }, [rows])
+
+  const beneficiaryOptions = useMemo(() => {
+    return rows.map((row) => ({
+      id: Number(row.id),
+      label: `${String(row.name ?? 'مستفيد')} (#${String(row.id)})`,
+    }))
+  }, [rows])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,6 +137,26 @@ export function SecretaryBeneficiariesPage() {
     void load()
   }, [load])
 
+  function cacheFamilyCredentials(familyId: number, credentials?: { email: string; password: string } | null) {
+    if (!credentials?.email || !credentials.password || !Number.isFinite(familyId)) {
+      return
+    }
+
+    setGeneratedCredentials((prev) => {
+      const next = {
+        ...prev,
+        [familyId]: {
+          email: credentials.email,
+          password: credentials.password,
+        },
+      }
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(CREDENTIALS_CACHE_KEY, JSON.stringify(next))
+      }
+      return next
+    })
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault()
     setMsg(null)
@@ -99,7 +164,7 @@ export function SecretaryBeneficiariesPage() {
     const nid = nationalId.trim() || `NID${Date.now()}`
 
     try {
-      await api.createBeneficiary({
+      const response = await api.createBeneficiary({
         family: {
           head_name: headName.trim(),
           phone: famPhone.trim() || null,
@@ -117,10 +182,26 @@ export function SecretaryBeneficiariesPage() {
           date_of_birth: benDob.trim() || null,
           notes: benNotes.trim() || null,
         },
+        members: createMembers
+          .filter((member) => member.name.trim())
+          .map((member) => ({
+            national_id: member.national_id.trim() || `NID-M-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            name: member.name.trim(),
+            family_relationship: member.family_relationship,
+            gender: member.gender || null,
+          })),
       })
-      setMsg('تم تسجيل المستفيد والعائلة.')
+      const credentials = response.credentials
+      const familyId = Number((response.beneficiary?.family as { id?: number } | undefined)?.id ?? response.beneficiary?.family_id)
+      cacheFamilyCredentials(familyId, credentials ?? null)
+      if (credentials?.email && credentials.password) {
+        setMsg(`تم التسجيل وتوليد بيانات دخول المستفيد: ${credentials.email} / ${credentials.password}`)
+      } else {
+        setMsg('تم تسجيل المستفيد والعائلة.')
+      }
       setShowCreateDialog(false)
       setNationalId('')
+      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
@@ -178,10 +259,16 @@ export function SecretaryBeneficiariesPage() {
     setErr(null)
 
     try {
-      await api.updateFamilyEnrollmentStatus(Number(famEnrollId), {
+      const response = await api.updateFamilyEnrollmentStatus(Number(famEnrollId), {
         enrollment_status: enrollStatus,
       })
-      setMsg('تم تحديث حالة تسجيل العائلة.')
+      const credentials = response.credentials
+      cacheFamilyCredentials(Number(famEnrollId), credentials ?? null)
+      if (credentials?.email && credentials.password) {
+        setMsg(`تم تحديث الحالة وتوليد بيانات الدخول: ${credentials.email} / ${credentials.password}`)
+      } else {
+        setMsg('تم تحديث حالة تسجيل العائلة.')
+      }
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'تحقق من الصلاحيات لاعتماد/رفض اللجنة'))
     }
@@ -288,6 +375,25 @@ export function SecretaryBeneficiariesPage() {
     }
   }
 
+  async function onLoadFamilyHistory(e: FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    setErr(null)
+
+    try {
+      const history = await api.fetchFamilyHistory(Number(historyFamilyId))
+      setHistorySummary(history.summary ?? null)
+      setHistoryAidRequests(history.aid_requests ?? [])
+      setHistoryMedicalRecords(history.medical_records ?? [])
+      setMsg('تم تحميل السجل الكامل للعائلة.')
+    } catch (ex) {
+      setErr(extractErrorMessage(ex as Error, 'تعذّر تحميل سجل العائلة'))
+      setHistorySummary(null)
+      setHistoryAidRequests([])
+      setHistoryMedicalRecords([])
+    }
+  }
+
   function openEditDialogForRow(row: Record<string, unknown>) {
     const family = row.family as { id?: number } | undefined
     setEditId(String(row.id ?? ''))
@@ -364,12 +470,14 @@ export function SecretaryBeneficiariesPage() {
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-xl border border-white/[0.06]">
-          <table className="w-full min-w-[760px] border-collapse text-xs">
+          <table className="w-full min-w-[980px] border-collapse text-xs">
             <thead>
               <tr className="border-b border-white/10 bg-black/30 text-[10px] uppercase tracking-wide text-white/45">
                 <th className="px-3 py-2.5 font-semibold">المستفيد</th>
                 <th className="px-3 py-2.5 font-semibold">رقم وطني</th>
                 <th className="px-3 py-2.5 font-semibold">كود العائلة</th>
+                <th className="px-3 py-2.5 font-semibold">إيميل الدخول</th>
+                <th className="px-3 py-2.5 font-semibold">كلمة السر</th>
                 <th className="px-3 py-2.5 font-semibold">عائلة #</th>
                 <th className="px-3 py-2.5 font-semibold">مستفيد #</th>
                 <th className="px-3 py-2.5 font-semibold">إجراء</th>
@@ -378,19 +486,20 @@ export function SecretaryBeneficiariesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-12 text-center text-white/50">
+                  <td colSpan={8} className="px-3 py-12 text-center text-white/50">
                     جاري التحميل…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-12 text-center text-white/45">
+                  <td colSpan={8} className="px-3 py-12 text-center text-white/45">
                     لا سجلات.
                   </td>
                 </tr>
               ) : (
                 rows.map((r, idx) => {
                   const fam = r.family as { id?: number; family_code?: string } | undefined
+                  const familyCredentials = fam?.id ? generatedCredentials[fam.id] : undefined
 
                   return (
                     <tr
@@ -400,6 +509,12 @@ export function SecretaryBeneficiariesPage() {
                       <td className="px-3 py-2.5 font-medium text-white">{String((r as { name?: string }).name ?? '—')}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px]">{String(r.national_id ?? '—')}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-violet-200/95">{String(fam?.family_code ?? '—')}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-emerald-100">
+                        {familyCredentials?.email ?? '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-amber-100">
+                        {familyCredentials?.password ?? '—'}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{String(fam?.id ?? '—')}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-white/65">#{String(r.id)}</td>
                       <td className="px-3 py-2.5">
@@ -418,17 +533,26 @@ export function SecretaryBeneficiariesPage() {
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-[11px] text-white/40">
+          يتم إظهار بيانات الدخول المولدة تلقائياً فقط (وقد لا تظهر للعائلات القديمة التي لم تُولّد لها بيانات ضمن هذه الجلسة).
+        </p>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">مسار قبول الأسرة على اللجنة</h2>
         <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={onEnrollment}>
-          <input
-            className="w-32 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="رقم العائلة"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={famEnrollId}
             onChange={(e) => setFamEnrollId(e.target.value)}
-          />
+          >
+            <option value="">اختر العائلة</option>
+            {familyOptions.map((family) => (
+              <option key={family.id} value={String(family.id)}>
+                {family.label}
+              </option>
+            ))}
+          </select>
           <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={enrollStatus}
@@ -452,12 +576,18 @@ export function SecretaryBeneficiariesPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">أهلية المساعدات (وجود دخل مباشر)</h2>
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={onEligibility}>
-          <input
-            className="w-32 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="رقم العائلة"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={eligFamId}
             onChange={(e) => setEligFamId(e.target.value)}
-          />
+          >
+            <option value="">اختر العائلة</option>
+            {familyOptions.map((family) => (
+              <option key={family.id} value={String(family.id)}>
+                {family.label}
+              </option>
+            ))}
+          </select>
           <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={hasIncome}
@@ -481,12 +611,18 @@ export function SecretaryBeneficiariesPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">المحفظة الطبية ورصيد الوصفات</h2>
         <form className="mt-3 flex flex-wrap gap-2" onSubmit={onLoadWallet}>
-          <input
-            className="w-32 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="beneficiary id"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={walletBenId}
             onChange={(e) => setWalletBenId(e.target.value)}
-          />
+          >
+            <option value="">اختر المستفيد</option>
+            {beneficiaryOptions.map((beneficiary) => (
+              <option key={beneficiary.id} value={String(beneficiary.id)}>
+                {beneficiary.label}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="rounded-lg bg-white/10 px-4 py-2 transition active:scale-[0.98] hover:bg-white/15">
             عرض الرصيد
           </button>
@@ -513,17 +649,86 @@ export function SecretaryBeneficiariesPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">رمز QR للأسرة المعتمدة</h2>
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={onQr}>
-          <input
-            className="w-32 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="رقم العائلة"
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             value={qrFamilyId}
             onChange={(e) => setQrFamilyId(e.target.value)}
-          />
+          >
+            <option value="">اختر العائلة</option>
+            {familyOptions.map((family) => (
+              <option key={family.id} value={String(family.id)}>
+                {family.label}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="rounded-lg bg-white/10 px-4 py-2">
             تحميل
           </button>
         </form>
         {qrImg ? <img src={qrImg} alt="رمز الأسرة" className="mt-4 max-w-xs rounded-xl border border-white/10" /> : null}
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-base font-semibold text-white">السجل الكامل للعائلة (عيني + طبي + طلبات)</h2>
+        <form className="mt-3 flex flex-wrap gap-2" onSubmit={onLoadFamilyHistory}>
+          <select
+            className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+            value={historyFamilyId}
+            onChange={(e) => setHistoryFamilyId(e.target.value)}
+          >
+            <option value="">اختر العائلة</option>
+            {familyOptions.map((family) => (
+              <option key={family.id} value={String(family.id)}>
+                {family.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="rounded-lg bg-white/10 px-4 py-2">
+            تحميل السجل
+          </button>
+        </form>
+
+        {historySummary ? (
+          <div className="mt-4 grid gap-2 text-xs sm:grid-cols-5">
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">أفراد الأسرة: {String(historySummary.beneficiaries_count ?? 0)}</div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">طلبات المساعدة: {String(historySummary.aid_requests_count ?? 0)}</div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">تسليمات عينية: {String(historySummary.delivered_allocations_count ?? 0)}</div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">سجلات طبية: {String(historySummary.medical_records_count ?? 0)}</div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">وصفات مصروفة: {String(historySummary.disbursed_prescriptions_count ?? 0)}</div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <h3 className="text-sm font-semibold text-white">طلبات المساعدة</h3>
+            <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto text-[12px] text-white/80">
+              {historyAidRequests.length === 0 ? (
+                <li className="text-white/45">لا يوجد سجل طلبات بعد.</li>
+              ) : (
+                historyAidRequests.map((aidRequest) => (
+                  <li key={String(aidRequest.id)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                    #{String(aidRequest.id)} — {String(aidRequest.type ?? '—')} — {String(aidRequest.status ?? '—')}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <h3 className="text-sm font-semibold text-white">السجل الطبي</h3>
+            <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto text-[12px] text-white/80">
+              {historyMedicalRecords.length === 0 ? (
+                <li className="text-white/45">لا يوجد سجل طبي بعد.</li>
+              ) : (
+                historyMedicalRecords.map((record) => (
+                  <li key={String(record.id)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                    #{String(record.id)} — {String((record.beneficiary as { name?: string } | undefined)?.name ?? 'مستفيد')} —{' '}
+                    {String(record.prescription_workflow_status ?? 'بدون وصفة')}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
       </section>
 
       {showCreateDialog ? (
@@ -614,6 +819,73 @@ export function SecretaryBeneficiariesPage() {
                 value={benNotes}
                 onChange={(e) => setBenNotes(e.target.value)}
               />
+              <h3 className="mt-2 border-b border-white/10 pb-1 text-[13px] font-semibold text-white sm:col-span-2">
+                أفراد العائلة (يدخلون مع التسجيل نفسه)
+              </h3>
+              {createMembers.map((member, idx) => (
+                <div key={idx} className="grid gap-2 rounded-lg border border-white/10 bg-black/20 p-3 sm:col-span-2 sm:grid-cols-4">
+                  <input
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                    placeholder="الاسم"
+                    value={member.name}
+                    onChange={(e) =>
+                      setCreateMembers((prev) => prev.map((item, i) => (i === idx ? { ...item, name: e.target.value } : item)))
+                    }
+                  />
+                  <input
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                    placeholder="الرقم الوطني"
+                    value={member.national_id}
+                    onChange={(e) =>
+                      setCreateMembers((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, national_id: e.target.value } : item)),
+                      )
+                    }
+                  />
+                  <select
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                    value={member.family_relationship}
+                    onChange={(e) =>
+                      setCreateMembers((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, family_relationship: e.target.value } : item)),
+                      )
+                    }
+                  >
+                    <option value="spouse">زوج/زوجة</option>
+                    <option value="child">ابن/ابنة</option>
+                    <option value="other">تابع آخر</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                      value={member.gender}
+                      onChange={(e) =>
+                        setCreateMembers((prev) => prev.map((item, i) => (i === idx ? { ...item, gender: e.target.value } : item)))
+                      }
+                    >
+                      <option value="">الجنس</option>
+                      <option value="male">ذكر</option>
+                      <option value="female">أنثى</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setCreateMembers((prev) => prev.filter((_, i) => i !== idx))}
+                      className="rounded-lg border border-red-400/30 px-2 py-2 text-xs text-red-100"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setCreateMembers((prev) => [...prev, { national_id: '', name: '', family_relationship: 'child', gender: '' }])
+                }
+                className="rounded-lg border border-white/20 py-2 text-xs text-white sm:col-span-2"
+              >
+                + إضافة فرد عائلة
+              </button>
               <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white sm:col-span-2">
                 حفظ التسجيل
               </button>
@@ -638,13 +910,19 @@ export function SecretaryBeneficiariesPage() {
 
             <form className="grid gap-2 sm:grid-cols-2" onSubmit={onPatchBeneficiary}>
               <h3 className="border-b border-white/10 pb-1 text-[13px] font-semibold text-white sm:col-span-2">بيانات المستفيد</h3>
-              <input
+              <select
                 required
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
-                placeholder="معرّف المستفيد *"
                 value={editId}
                 onChange={(e) => setEditId(e.target.value)}
-              />
+              >
+                <option value="">اختر المستفيد</option>
+                {beneficiaryOptions.map((beneficiary) => (
+                  <option key={beneficiary.id} value={String(beneficiary.id)}>
+                    {beneficiary.label}
+                  </option>
+                ))}
+              </select>
               <input
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
                 placeholder="الاسم"
@@ -679,13 +957,19 @@ export function SecretaryBeneficiariesPage() {
 
             <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={onProfile}>
               <h3 className="border-b border-white/10 pb-1 text-[13px] font-semibold text-white sm:col-span-2">بيانات الأسرة</h3>
-              <input
+              <select
                 required
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
-                placeholder="معرّف العائلة *"
                 value={famProfileId}
                 onChange={(e) => setFamProfileId(e.target.value)}
-              />
+              >
+                <option value="">اختر العائلة</option>
+                {familyOptions.map((family) => (
+                  <option key={family.id} value={String(family.id)}>
+                    {family.label}
+                  </option>
+                ))}
+              </select>
               <input
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
                 placeholder="رب الأسرة"
@@ -723,103 +1007,6 @@ export function SecretaryBeneficiariesPage() {
           </div>
         </div>
       ) : null}
-
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <h2 className="text-base font-semibold text-white">أفراد العائلة (زوج/ة، أولاد)</h2>
-        <p className="mt-1 text-xs text-white/50">أضف أفراداً لعائلة مسجّلة مسبقاً — رب الأسرة يُسجّل عند إنشاء العائلة.</p>
-        <form
-          className="mt-4 grid gap-3 sm:grid-cols-2"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            setMsg(null)
-            setErr(null)
-            try {
-              await api.addFamilyMember(Number(memberFamId), {
-                national_id: memberNid.trim() || `NID-M-${Date.now()}`,
-                name: memberName.trim(),
-                family_relationship: memberRel,
-                gender: memberGender || null,
-              })
-              setMsg('تمت إضافة فرد العائلة.')
-              const res = await api.fetchFamilyMembers(Number(memberFamId))
-              setFamilyMembers(res.members)
-              await load()
-            } catch (ex) {
-              setErr(extractErrorMessage(ex, 'فشل الإضافة'))
-            }
-          }}
-        >
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">معرّف العائلة</span>
-            <input
-              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-              value={memberFamId}
-              onChange={(e) => setMemberFamId(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">صلة القرابة</span>
-            <select
-              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-              value={memberRel}
-              onChange={(e) => setMemberRel(e.target.value)}
-            >
-              <option value="spouse">زوج / زوجة</option>
-              <option value="child">ابن / ابنة</option>
-              <option value="other">قريب آخر</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-[11px] text-white/55">الاسم الكامل</span>
-            <input
-              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-              value={memberName}
-              onChange={(e) => setMemberName(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">الرقم الوطني</span>
-            <input
-              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-              value={memberNid}
-              onChange={(e) => setMemberNid(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">الجنس (اختياري)</span>
-            <select
-              className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-              value={memberGender}
-              onChange={(e) => setMemberGender(e.target.value)}
-            >
-              <option value="">—</option>
-              <option value="male">ذكر</option>
-              <option value="female">أنثى</option>
-            </select>
-          </label>
-          <button type="submit" className="rounded-lg bg-sky-600 py-2.5 font-medium text-white sm:col-span-2">
-            إضافة فرد للعائلة
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-white/20 py-2 text-xs text-white/80 sm:col-span-2"
-            onClick={() => {
-              void api.fetchFamilyMembers(Number(memberFamId)).then((r) => setFamilyMembers(r.members))
-            }}
-          >
-            عرض أفراد العائلة
-          </button>
-        </form>
-        {familyMembers.length > 0 ? (
-          <ul className="mt-3 space-y-1 text-xs">
-            {familyMembers.map((m) => (
-              <li key={String(m.id)} className="rounded bg-black/30 px-2 py-1">
-                {String(m.name)} — {labelFamilyRelationshipAr(m.family_relationship)}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
 
       <footer className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[11px] text-white/50">
         <strong className="text-white/65">ملاحظة:</strong> تسجيل الدخول والخروج متاح عامّةً من قائمة الهوية في أعلى الصفحة.

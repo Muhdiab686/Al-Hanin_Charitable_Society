@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOperationalExpenseRequest;
+use App\Models\Campaign;
 use App\Models\FinancialTransaction;
 use App\Models\OperationalExpense;
 use Illuminate\Http\JsonResponse;
@@ -55,15 +56,21 @@ class FinanceController extends Controller
         $validated = $request->validated();
 
         $transaction = DB::transaction(function () use ($request, $validated): FinancialTransaction {
+            $campaign = null;
+            if (isset($validated['campaign_id'])) {
+                $campaign = Campaign::query()->whereKey($validated['campaign_id'])->lockForUpdate()->firstOrFail();
+            }
+
             $voucher = OperationalExpense::query()->create([
                 'invoice_reference' => $validated['invoice_reference'] ?? null,
                 'vendor' => $validated['vendor'] ?? null,
+                'campaign_id' => $campaign?->id,
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            return FinancialTransaction::query()->create([
+            $transaction = FinancialTransaction::query()->create([
                 'type' => 'expense',
-                'source' => 'operational_invoice',
+                'source' => $campaign === null ? 'operational_invoice' : 'campaign_invoice',
                 'amount' => $validated['amount'],
                 'reference_type' => OperationalExpense::class,
                 'reference_id' => $voucher->id,
@@ -71,6 +78,12 @@ class FinanceController extends Controller
                 'recorded_by' => $request->user()->id,
                 'recorded_at' => now(),
             ]);
+
+            if ($campaign !== null) {
+                $campaign->increment('spent_amount', (float) $validated['amount']);
+            }
+
+            return $transaction;
         });
 
         return response()->json([
@@ -83,7 +96,7 @@ class FinanceController extends Controller
     {
         $query = FinancialTransaction::query()
             ->where('type', 'expense')
-            ->where('source', 'operational_invoice')
+            ->whereIn('source', ['operational_invoice', 'campaign_invoice'])
             ->with(['recorder:id,name,email', 'reference'])
             ->latest('recorded_at');
 

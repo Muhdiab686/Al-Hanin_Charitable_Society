@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { extractErrorMessage } from '../../api/client'
-import type { CampaignReportingResponse } from '../../api/services'
 import * as api from '../../api/services'
 import { labelAidTypeAr } from '../../lib/operationalLabels'
 
@@ -11,21 +10,33 @@ const PAYMENT_METHODS = [
   { value: 'ewallet', label: 'محفظة إلكترونية' },
 ]
 
+function campaignStatusLabel(status: string): string {
+  if (status === 'completed') {
+    return 'مكتملة'
+  }
+  if (status === 'paused') {
+    return 'متوقفة'
+  }
+  return 'نشطة'
+}
+
 export function DonorDonationsPage() {
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
-  const [campaigns, setCampaigns] = useState<CampaignReportingResponse['awareness_activities']>([])
+  const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
-  const [campaignsNotice, setCampaignsNotice] = useState<string | null>(null)
 
   const [showDonateDialog, setShowDonateDialog] = useState(false)
   const [showCampaignDonateDialog, setShowCampaignDonateDialog] = useState(false)
   const [showReceiptDialog, setShowReceiptDialog] = useState(false)
   const [selectedDonation, setSelectedDonation] = useState<Record<string, unknown> | null>(null)
+  const [receiptQr, setReceiptQr] = useState<string | null>(null)
 
   const [amount, setAmount] = useState('50')
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value)
+  const [showDonorName, setShowDonorName] = useState(true)
+  const [donorName, setDonorName] = useState('')
   const [purpose, setPurpose] = useState('')
   const [frequency, setFrequency] = useState<'once' | 'monthly' | 'yearly'>('once')
   const [notes, setNotes] = useState('')
@@ -42,7 +53,6 @@ export function DonorDonationsPage() {
   async function load() {
     setLoading(true)
     setErr(null)
-    setCampaignsNotice(null)
     try {
       const donations = await api.fetchDonations({ page: 1 })
       setRows((donations.data as Record<string, unknown>[]) ?? [])
@@ -55,11 +65,10 @@ export function DonorDonationsPage() {
       }
 
       try {
-        const reporting = await api.fetchCampaignReporting()
-        setCampaigns(reporting.awareness_activities ?? [])
+        const c = await api.fetchDonorCampaigns()
+        setCampaigns(c)
       } catch {
         setCampaigns([])
-        setCampaignsNotice('عرض الحملات غير متاح حالياً لحسابك. يمكنك الاستمرار بالتبرع العام أو التخصيص النصّي.')
       }
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر تحميل بيانات المتبرع'))
@@ -77,11 +86,24 @@ export function DonorDonationsPage() {
     setErr(null)
     setMsg(null)
     try {
+      if (paymentMethod === 'card') {
+        const checkout = await api.createStripeCheckout({
+          amount: Number(amount),
+          purpose: purpose.trim() || undefined,
+          show_donor_name: showDonorName,
+          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+        })
+        window.location.href = checkout.checkout_url
+        return
+      }
+
       await api.createDonation({
         type: 'cash',
         channel: 'web',
         cash_amount: Number(amount),
         purpose: purpose.trim() || null,
+        show_donor_name: showDonorName,
+        donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
         pledge_frequency: frequency,
         notes: [
           notes.trim() || null,
@@ -90,7 +112,7 @@ export function DonorDonationsPage() {
           .filter(Boolean)
           .join(' | '),
       })
-      setMsg('تم إرسال التبرع الإلكتروني بنجاح.')
+      setMsg('تم تسجيل التبرع بنجاح.')
       setShowDonateDialog(false)
       await load()
     } catch (e) {
@@ -108,15 +130,29 @@ export function DonorDonationsPage() {
     }
     const campaign = campaigns.find((c) => String(c.id) === campaignId)
     try {
+      if (paymentMethod === 'card') {
+        const checkout = await api.createStripeCheckout({
+          amount: Number(amount),
+          purpose: campaign ? String(campaign.title ?? 'حملة') : purpose.trim() || undefined,
+          campaign_id: campaign ? Number(campaign.id) : undefined,
+          show_donor_name: showDonorName,
+          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+        })
+        window.location.href = checkout.checkout_url
+        return
+      }
       await api.createDonation({
         type: 'cash',
         channel: 'web',
         cash_amount: Number(amount),
-        purpose: campaign ? `حملة: ${campaign.title}` : purpose.trim() || null,
+        purpose: campaign ? `حملة: ${String(campaign.title ?? '')}` : purpose.trim() || null,
+        campaign_id: campaign ? Number(campaign.id) : undefined,
+        show_donor_name: showDonorName,
+        donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
         pledge_frequency: frequency,
-        notes: `تبرع مباشر لحملة محددة${campaign ? ` (#${campaign.id})` : ''}`,
+        notes: `تبرع مباشر لحملة محددة${campaign ? ` (#${String(campaign.id ?? '')})` : ''}`,
       })
-      setMsg('تم التبرع المباشر للحملة بنجاح.')
+      setMsg('تم التبرع للحملة بنجاح.')
       setShowCampaignDonateDialog(false)
       await load()
     } catch (e) {
@@ -124,11 +160,29 @@ export function DonorDonationsPage() {
     }
   }
 
+  async function openReceiptDialog(donation: Record<string, unknown>) {
+    setSelectedDonation(donation)
+    setReceiptQr(null)
+    setShowReceiptDialog(true)
+
+    const donationId = Number(donation.id)
+    if (!Number.isFinite(donationId) || donationId <= 0) {
+      return
+    }
+
+    try {
+      const qr = await api.fetchDonationReceiptQr(donationId)
+      setReceiptQr(`data:${qr.mime_type};base64,${qr.png_base64}`)
+    } catch {
+      setReceiptQr(null)
+    }
+  }
+
   return (
     <div className="space-y-6 text-sm text-white/82">
       {(msg || err) && (
         <div
-          className={`rounded-xl px-4 py-3 ${err ? 'border border-red-400/35 bg-red-500/12 text-red-50' : 'border border-emerald-400/35 bg-emerald-500/12 text-emerald-50'}`}
+          className={`fixed inset-x-4 top-4 z-50 mx-auto max-w-lg rounded-xl px-4 py-3 shadow-lg ${err ? 'border border-red-400/35 bg-red-600/90 text-red-50' : 'border border-emerald-400/35 bg-emerald-600/90 text-emerald-50'}`}
         >
           {err ?? msg}
         </div>
@@ -193,19 +247,15 @@ export function DonorDonationsPage() {
                       setMsg(null)
                       setErr(null)
                       try {
-                        await api.createDonation({
-                          type: 'cash',
-                          channel: 'donor_portal',
-                          cash_amount: Number(urgentAmount),
-                          purpose: `طوارئ-مساعدة:#${String(r.id)}`,
-                          donor_name: 'متبرع بالمنصّة',
-                          notes: `تبرع لحالة: ${String(r.public_title ?? '')}`,
+                        const checkout = await api.createStripeCheckout({
+                          amount: Number(urgentAmount),
+                          purpose: `حالة طارئة: ${String(r.public_title ?? '')} (#${String(r.id)})`,
+                          show_donor_name: showDonorName,
+                          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
                         })
-                        setMsg('تم تسجيل تبرعك للحالة الطارئة.')
-                        setUrgentDonateId(null)
-                        await load()
+                        window.location.href = checkout.checkout_url
                       } catch (ex) {
-                        setErr(extractErrorMessage(ex, 'فشل التبرع'))
+                        setErr(extractErrorMessage(ex, 'فشل التحويل إلى الدفع الإلكتروني'))
                       }
                     }}
                   >
@@ -218,7 +268,7 @@ export function DonorDonationsPage() {
                       />
                     </label>
                     <button type="submit" className="rounded-lg bg-amber-600 px-4 py-2 text-white">
-                      تأكيد
+                      الدفع الإلكتروني
                     </button>
                     <button
                       type="button"
@@ -245,22 +295,38 @@ export function DonorDonationsPage() {
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h3 className="text-base font-semibold text-white">الحملات النشطة</h3>
-        {campaignsNotice ? (
-          <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            {campaignsNotice}
-          </div>
-        ) : null}
         <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
           {campaigns.length === 0 ? (
             <p className="text-xs text-white/50">لا توجد حملات متاحة حالياً.</p>
           ) : (
             campaigns.map((c) => (
-              <div key={c.id} className="rounded-lg border border-white/10 bg-black/25 px-3 py-2">
-                <p className="font-medium text-white">{c.title}</p>
-                <p className="mt-1 text-[12px] text-white/62">حالة: {c.status}</p>
-                <p className="text-[12px] text-white/62">
-                  مستفيدون مرتبطون: <span className="font-mono">{c.linked_beneficiaries_count}</span>
+              <div key={String(c.id)} className="rounded-lg border border-white/10 bg-black/25 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-white">{String(c.title ?? 'حملة')}</p>
+                  <span className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">
+                    {campaignStatusLabel(String(c.status ?? 'active'))}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-white/50">
+                  كود الحملة: CMP-{String(c.id)} {c.ends_at ? `• إغلاق: ${String(c.ends_at)}` : ''}
                 </p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-fuchsia-500"
+                    style={{ width: `${Math.min(100, Math.max(0, Number(c.progress_percentage ?? 0)))}%` }}
+                  />
+                </div>
+                <div className="mt-2 grid gap-1 text-[11px] text-fuchsia-100/90 sm:grid-cols-3">
+                  <p>
+                    تم جمع: <span className="font-mono">{String(c.raised_amount ?? '0')}</span>
+                  </p>
+                  <p>
+                    المتبقي: <span className="font-mono">{String(Math.max(0, Number(c.goal_amount ?? 0) - Number(c.raised_amount ?? 0)))}</span>
+                  </p>
+                  <p>
+                    الرصيد: <span className="font-mono">{String(c.wallet_balance ?? '0')}</span>
+                  </p>
+                </div>
               </div>
             ))
           )}
@@ -305,10 +371,7 @@ export function DonorDonationsPage() {
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedDonation(d)
-                          setShowReceiptDialog(true)
-                        }}
+                        onClick={() => void openReceiptDialog(d)}
                         className="rounded-md border border-white/20 px-2 py-1 text-[11px] text-white"
                       >
                         عرض الإيصال
@@ -349,6 +412,18 @@ export function DonorDonationsPage() {
                   </option>
                 ))}
               </select>
+              <label className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/85">
+                <input type="checkbox" checked={showDonorName} onChange={(e) => setShowDonorName(e.target.checked)} />
+                إظهار اسم المتبرع
+              </label>
+              {showDonorName ? (
+                <input
+                  className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  placeholder="اسم المتبرع"
+                  value={donorName}
+                  onChange={(e) => setDonorName(e.target.value)}
+                />
+              ) : null}
               <select
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={frequency}
@@ -372,7 +447,7 @@ export function DonorDonationsPage() {
                 onChange={(e) => setNotes(e.target.value)}
               />
               <button type="submit" className="sm:col-span-2 rounded-lg bg-rose-600 py-2.5 font-medium text-white">
-                تنفيذ التبرع
+                {paymentMethod === 'card' ? 'الانتقال إلى Stripe' : 'تنفيذ التبرع'}
               </button>
             </form>
           </div>
@@ -397,11 +472,23 @@ export function DonorDonationsPage() {
               >
                 <option value="">{campaigns.length === 0 ? 'لا توجد حملات متاحة' : '— اختر حملة نشطة —'}</option>
                 {campaigns.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.title} (#{c.id})
+                  <option key={String(c.id)} value={String(c.id)}>
+                    {String(c.title ?? 'حملة')} (#{String(c.id)})
                   </option>
                 ))}
               </select>
+              <label className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/85">
+                <input type="checkbox" checked={showDonorName} onChange={(e) => setShowDonorName(e.target.checked)} />
+                إظهار اسم المتبرع
+              </label>
+              {showDonorName ? (
+                <input
+                  className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  placeholder="اسم المتبرع"
+                  value={donorName}
+                  onChange={(e) => setDonorName(e.target.value)}
+                />
+              ) : null}
               <input
                 className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 placeholder="أو أدخل اسم الجهة/المشروع يدوياً عند عدم توفر الحملات"
@@ -416,6 +503,17 @@ export function DonorDonationsPage() {
               />
               <select
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as 'once' | 'monthly' | 'yearly')}
               >
@@ -424,7 +522,7 @@ export function DonorDonationsPage() {
                 <option value="yearly">سنوي</option>
               </select>
               <button type="submit" className="sm:col-span-2 rounded-lg bg-fuchsia-600 py-2.5 font-medium text-white">
-                تبرع للحملة
+                {paymentMethod === 'card' ? 'الدفع عبر Stripe' : 'تبرع للحملة'}
               </button>
             </form>
           </div>
@@ -449,6 +547,12 @@ export function DonorDonationsPage() {
               <p>الغرض: {String(selectedDonation.purpose ?? 'تبرع عام')}</p>
               <p>التكرار: {String(selectedDonation.pledge_frequency ?? 'مرة واحدة')}</p>
               <p>التاريخ: {String(selectedDonation.created_at ?? '—')}</p>
+              {receiptQr ? (
+                <div className="pt-2">
+                  <p className="mb-2 text-xs text-white/60">QR إيصال التبرع</p>
+                  <img src={receiptQr} alt="Donation receipt QR" className="h-40 w-40 rounded-lg border border-white/20 bg-white p-1" />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

@@ -21,8 +21,8 @@ class StoreMedicalRecordRequest extends FormRequest
             'clinic_appointment_id' => ['required', 'exists:clinic_appointments,id'],
             'diagnosis' => ['required', 'string'],
             'tests_result' => ['nullable', 'string'],
-            'prescription' => ['nullable', 'string'],
-            'prescription_cost' => ['nullable', 'numeric', 'min:0'],
+            'prescription' => ['nullable', 'string', 'required_with:prescription_cost'],
+            'prescription_cost' => ['nullable', 'numeric', 'min:0.01', 'required_with:prescription'],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

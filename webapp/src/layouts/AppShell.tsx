@@ -70,6 +70,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/secretary/aid-requests', label: 'طلبات المساعدة' },
       { to: '/app/secretary/clinic', label: 'العيادة والمواعيد' },
       { to: '/app/secretary/medical', label: 'السجل الطبي والمختبر' },
+      { to: '/app/secretary/notifications', label: 'الإشعارات' },
     ],
   },
   recording_secretary: {
@@ -84,7 +85,9 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/recording-secretary/aid-plans', label: 'خطط التوزيع' },
       { to: '/app/recording-secretary/categories', label: 'التصنيفات' },
       { to: '/app/recording-secretary/volunteers', label: 'المتطوعون' },
+      { to: '/app/recording-secretary/donor-chat', label: 'شات المتبرعين' },
       { to: '/app/recording-secretary/qr', label: 'رمز QR' },
+      { to: '/app/recording-secretary/notifications', label: 'الإشعارات' },
     ],
   },
   accountant: {
@@ -97,7 +100,9 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/accountant/donations', label: 'التبرعات' },
       { to: '/app/accountant/expenses', label: 'المصروفات التشغيلية' },
       { to: '/app/accountant/campaign-reporting', label: 'تقارير الحملات' },
+      { to: '/app/accountant/donor-chat', label: 'شات المتبرعين' },
       { to: '/app/accountant/payouts', label: 'صرف الأطباء' },
+      { to: '/app/accountant/notifications', label: 'الإشعارات' },
     ],
   },
   doctor: {
@@ -107,8 +112,11 @@ const shells: Record<ShellVariant, ShellBlock> = {
     title: 'مساحة الطبيب',
     links: [
       { to: '/app/doctor', label: 'الرئيسية' },
+      { to: '/app/doctor/profile', label: 'ملفي المهني' },
       { to: '/app/doctor/appointments', label: 'الفحص والمواعيد' },
       { to: '/app/doctor/medical', label: 'السجل الطبي والتحاليل' },
+      { to: '/app/doctor/payouts', label: 'طلبات المستحقات' },
+      { to: '/app/doctor/notifications', label: 'الإشعارات' },
     ],
   },
   storekeeper: {
@@ -119,6 +127,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
     links: [
       { to: '/app/storekeeper', label: 'الرئيسية' },
       { to: '/app/storekeeper/inventory', label: 'المستودع والمواد' },
+      { to: '/app/storekeeper/notifications', label: 'الإشعارات' },
     ],
   },
   donor: {
@@ -131,6 +140,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/donor/chat', label: 'الشات' },
       { to: '/app/donor/donations', label: 'تبرعاتي وإيصالاتي' },
       { to: '/app/donor/urgent-aid', label: 'مساعدة طارئة' },
+      { to: '/app/donor/notifications', label: 'الإشعارات' },
     ],
   },
   volunteer: {
@@ -142,6 +152,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/volunteer', label: 'الرئيسية' },
       { to: '/app/volunteer/aid', label: 'المساعدة' },
       { to: '/app/volunteer/opportunities', label: 'فرص التطوع' },
+      { to: '/app/volunteer/notifications', label: 'الإشعارات' },
     ],
   },
   beneficiary: {
@@ -154,6 +165,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/beneficiary/aid', label: 'طلبات المساعدة' },
       { to: '/app/beneficiary/appointments', label: 'المواعيد' },
       { to: '/app/beneficiary/medical', label: 'السجلات الطبية' },
+      { to: '/app/beneficiary/notifications', label: 'الإشعارات' },
     ],
   },
 }

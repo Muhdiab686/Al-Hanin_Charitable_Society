@@ -85,4 +85,23 @@ class ClinicApiTest extends TestCase
         $appointment->refresh();
         $this->assertSame('completed', $appointment->status);
     }
+
+    public function test_doctor_can_update_his_own_clinic_profile(): void
+    {
+        $doctor = User::factory()->create(['role' => UserRole::Doctor->value]);
+        $doctor->syncRoles([UserRole::Doctor->value]);
+
+        $response = $this->putJson('/api/v1/doctor/profile', [
+            'specialty' => 'Cardiology',
+            'bio' => 'Senior cardiology doctor',
+            'consultation_fee' => 25,
+            'available_days' => ['Sunday', 'Tuesday'],
+        ], [
+            'Authorization' => 'Bearer '.$doctor->createToken('doctor')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('profile.specialty', 'Cardiology')
+            ->assertJsonPath('profile.consultation_fee', '25.00');
+    }
 }

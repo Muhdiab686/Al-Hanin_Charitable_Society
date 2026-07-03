@@ -184,12 +184,18 @@ export function AdminUsersPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">تعديل مستخدم</h2>
         <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={onUpdate}>
-          <input
+          <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="id"
             value={uId}
             onChange={(e) => setUId(e.target.value)}
-          />
+          >
+            <option value="">اختر المستخدم</option>
+            {rows.map((userRow) => (
+              <option key={String(userRow.id)} value={String(userRow.id)}>
+                #{userRow.id} — {userRow.name} ({userRow.role})
+              </option>
+            ))}
+          </select>
           <input
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
             placeholder="اسم (اختياري)"
@@ -202,12 +208,24 @@ export function AdminUsersPage() {
             value={uEmail}
             onChange={(e) => setUEmail(e.target.value)}
           />
-          <input
+          <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
-            placeholder="دور (اختياري)"
             value={uRole}
             onChange={(e) => setURole(e.target.value)}
-          />
+          >
+            <option value="">الدور (اختياري)</option>
+            {roleOptions.length
+              ? roleOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.value}
+                  </option>
+                ))
+              : ['admin', 'secretary', 'recording_secretary', 'beneficiary', 'donor', 'doctor', 'accountant', 'storekeeper', 'volunteer'].map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+          </select>
           <button type="submit" className="rounded-lg bg-white/15 py-2 text-white sm:col-span-2">
             تحديث
           </button>

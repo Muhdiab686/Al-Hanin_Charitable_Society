@@ -12,6 +12,7 @@ use App\Models\InventoryItem;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AidDeliveryApiTest extends TestCase
@@ -124,7 +125,7 @@ class AidDeliveryApiTest extends TestCase
             ['allocation_ids' => [$allocation->id]],
             ['Authorization' => 'Bearer '.$token]
         )->assertUnprocessable()
-            ->assertJsonValidationErrors(['allocation_ids']);
+            ->assertJsonValidationErrors(['aid_request']);
     }
 
     public function test_delivery_rejects_allocations_from_other_requests(): void
@@ -157,5 +158,47 @@ class AidDeliveryApiTest extends TestCase
             ['Authorization' => 'Bearer '.$storekeeper->createToken('sk')->plainTextToken]
         )->assertUnprocessable()
             ->assertJsonValidationErrors(['aid_request']);
+    }
+
+    public function test_beneficiary_can_confirm_delivery_via_family_qr_payload(): void
+    {
+        [$aidRequest, $allocation] = $this->approvedAidRequestWithAllocation();
+        $beneficiary = $aidRequest->beneficiary;
+        $beneficiaryUser = $beneficiary->user;
+
+        $qrToken = (string) Str::uuid();
+        $beneficiary->family->forceFill([
+            'qr_token' => $qrToken,
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+        ])->save();
+
+        $response = $this->postJson('/api/v1/beneficiary/aid-deliveries/confirm-by-qr', [
+            'payload' => 'hanin:'.$qrToken,
+            'aid_request_id' => $aidRequest->id,
+        ], [
+            'Authorization' => 'Bearer '.$beneficiaryUser->createToken('beneficiary')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('deliveries.0.id', $allocation->id);
+
+        $this->assertDatabaseHas('aid_inventory_allocations', [
+            'id' => $allocation->id,
+            'delivered_by' => $beneficiaryUser->id,
+        ]);
+    }
+
+    public function test_beneficiary_qr_confirm_fails_when_payload_not_matching_family(): void
+    {
+        [$aidRequest] = $this->approvedAidRequestWithAllocation();
+        $beneficiaryUser = $aidRequest->beneficiary->user;
+
+        $this->postJson('/api/v1/beneficiary/aid-deliveries/confirm-by-qr', [
+            'payload' => 'hanin:'.Str::uuid(),
+            'aid_request_id' => $aidRequest->id,
+        ], [
+            'Authorization' => 'Bearer '.$beneficiaryUser->createToken('beneficiary')->plainTextToken,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['payload']);
     }
 }

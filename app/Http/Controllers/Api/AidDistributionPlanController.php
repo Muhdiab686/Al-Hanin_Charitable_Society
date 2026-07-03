@@ -8,6 +8,7 @@ use App\Http\Requests\StoreAidDistributionPlanRequest;
 use App\Models\AidDistributionPlan;
 use App\Models\AidDistributionPlanLine;
 use App\Models\Family;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,9 +19,21 @@ class AidDistributionPlanController extends Controller
     {
         $plans = AidDistributionPlan::query()
             ->with('creator:id,name,email')
+            ->with('campaign:id,title,status,goal_amount,raised_amount,spent_amount')
             ->withCount('lines')
             ->latest()
             ->paginate(15);
+
+        $plans->setCollection(
+            $plans->getCollection()->map(function (AidDistributionPlan $plan): AidDistributionPlan {
+                $cycles = max(1, (int) $plan->cycles_per_year);
+                $completed = min((int) $plan->completed_cycles, $cycles);
+                $plan->setAttribute('progress_percentage', round(($completed / $cycles) * 100, 2));
+                $plan->setAttribute('remaining_cycles', max(0, $cycles - $completed));
+
+                return $plan;
+            })
+        );
 
         return response()->json($plans);
     }
@@ -30,6 +43,8 @@ class AidDistributionPlanController extends Controller
         $validated = $request->validated();
 
         $filterCriteria = $validated['filter_criteria'] ?? [];
+        $distributionFrequency = (string) ($validated['distribution_frequency'] ?? 'once');
+        $cyclesPerYear = $this->cyclesPerYear($distributionFrequency);
 
         $eligibleFamilies = Family::query()
             ->where('enrollment_status', FamilyEnrollmentStatus::Approved->value)
@@ -38,6 +53,7 @@ class AidDistributionPlanController extends Controller
             ->with(['beneficiaries' => fn ($query) => $query->orderByDesc('is_head_of_family')->orderBy('id')])
             ->get()
             ->filter(fn (Family $family): bool => $this->matchesFilterCriteria($family, $filterCriteria))
+            ->sortByDesc(fn (Family $family): int => $this->priorityScore($family))
             ->values();
 
         if ($eligibleFamilies->isEmpty()) {
@@ -46,15 +62,28 @@ class AidDistributionPlanController extends Controller
             ]);
         }
 
-        $plan = DB::transaction(function () use ($request, $validated, $eligibleFamilies, $filterCriteria): AidDistributionPlan {
+        $plan = DB::transaction(function () use (
+            $request,
+            $validated,
+            $eligibleFamilies,
+            $filterCriteria,
+            $distributionFrequency,
+            $cyclesPerYear
+        ): AidDistributionPlan {
             $plan = AidDistributionPlan::query()->create([
                 'title' => $validated['title'],
                 'aid_type' => $validated['aid_type'],
+                'campaign_id' => $validated['campaign_id'] ?? null,
                 'distribution_date' => $validated['distribution_date'],
+                'distribution_frequency' => $distributionFrequency,
+                'cycles_per_year' => $cyclesPerYear,
                 'eligible_families_count' => $eligibleFamilies->count(),
                 'total_amount' => $validated['total_amount'] ?? null,
+                'projected_annual_amount' => isset($validated['total_amount']) ? (float) $validated['total_amount'] * $cyclesPerYear : null,
                 'total_units' => $validated['total_units'] ?? null,
+                'projected_annual_units' => isset($validated['total_units']) ? (int) $validated['total_units'] * $cyclesPerYear : null,
                 'status' => 'draft',
+                'completed_cycles' => 0,
                 'notes' => $validated['notes'] ?? null,
                 'filter_criteria' => $filterCriteria ?: null,
                 'created_by' => $request->user()->id,
@@ -71,8 +100,31 @@ class AidDistributionPlanController extends Controller
 
         return response()->json([
             'message' => __('Aid distribution plan created successfully.'),
-            'plan' => $plan->load(['creator:id,name,email', 'lines.family', 'lines.beneficiary']),
+            'plan' => $plan->load([
+                'creator:id,name,email',
+                'campaign:id,title,status,goal_amount,raised_amount,spent_amount',
+                'lines.family',
+                'lines.beneficiary',
+            ]),
         ], 201);
+    }
+
+    public function completeCycle(AidDistributionPlan $aidDistributionPlan): JsonResponse
+    {
+        $cyclesPerYear = max(1, (int) $aidDistributionPlan->cycles_per_year);
+        $nextCompletedCycles = min($cyclesPerYear, (int) $aidDistributionPlan->completed_cycles + 1);
+
+        $nextStatus = $nextCompletedCycles >= $cyclesPerYear ? 'completed' : 'in_progress';
+
+        $aidDistributionPlan->forceFill([
+            'completed_cycles' => $nextCompletedCycles,
+            'status' => $nextStatus,
+        ])->save();
+
+        return response()->json([
+            'message' => __('Plan cycle marked as completed.'),
+            'plan' => $aidDistributionPlan->fresh()->load('creator:id,name,email'),
+        ]);
     }
 
     /**
@@ -153,6 +205,30 @@ class AidDistributionPlanController extends Controller
             }
         }
 
+        if (isset($criteria['min_children_under_18'])) {
+            $childrenUnder18 = $children->filter(function ($child): bool {
+                $age = $this->ageValue($child->age, $child->date_of_birth);
+
+                return $age !== null && $age < 18;
+            })->count();
+
+            if ($childrenUnder18 < (int) $criteria['min_children_under_18']) {
+                return false;
+            }
+        }
+
+        if (isset($criteria['min_adults'])) {
+            $adults = $family->beneficiaries->filter(function ($member): bool {
+                $age = $this->ageValue($member->age, $member->date_of_birth);
+
+                return $age !== null && $age >= 18;
+            })->count();
+
+            if ($adults < (int) $criteria['min_adults']) {
+                return false;
+            }
+        }
+
         if (isset($criteria['min_family_members']) && $family->members_count < (int) $criteria['min_family_members']) {
             return false;
         }
@@ -168,6 +244,81 @@ class AidDistributionPlanController extends Controller
             }
         }
 
+        if (! empty($criteria['health_priority_only'])) {
+            $hasMedicalPriority = $family->beneficiaries->contains(function ($member): bool {
+                $status = strtolower(trim((string) ($member->health_status ?? '')));
+
+                return $status !== '' && ! in_array($status, ['good', 'stable', 'healthy'], true);
+            });
+
+            if (! $hasMedicalPriority) {
+                return false;
+            }
+        }
+
+        if (! empty($criteria['housing_statuses']) && is_array($criteria['housing_statuses'])) {
+            $allowedHousingStatuses = array_filter(array_map(
+                fn ($value): string => strtolower(trim((string) $value)),
+                $criteria['housing_statuses'],
+            ));
+
+            if ($allowedHousingStatuses !== []) {
+                $housingStatus = strtolower(trim((string) ($family->housing_status ?? '')));
+                if (! in_array($housingStatus, $allowedHousingStatuses, true)) {
+                    return false;
+                }
+            }
+        }
+
         return true;
+    }
+
+    private function cyclesPerYear(string $distributionFrequency): int
+    {
+        return match ($distributionFrequency) {
+            'quarterly' => 4,
+            'yearly' => 1,
+            default => 1,
+        };
+    }
+
+    private function priorityScore(Family $family): int
+    {
+        $childrenUnder18 = $family->beneficiaries->filter(function ($member): bool {
+            $age = $this->ageValue($member->age, $member->date_of_birth);
+
+            return $age !== null && $age < 18;
+        })->count();
+
+        $healthCases = $family->beneficiaries->filter(function ($member): bool {
+            $status = strtolower(trim((string) ($member->health_status ?? '')));
+
+            return $status !== '' && ! in_array($status, ['good', 'stable', 'healthy'], true);
+        })->count();
+
+        $housingPriority = match (strtolower(trim((string) ($family->housing_status ?? '')))) {
+            'rent', 'rented', 'displaced', 'temporary', 'shared' => 3,
+            'borrowed', 'unsafe' => 2,
+            default => 0,
+        };
+
+        return ($childrenUnder18 * 3) + ($healthCases * 2) + $housingPriority + (int) ($family->members_count ?? 0);
+    }
+
+    private function ageValue(mixed $age, mixed $dateOfBirth): ?int
+    {
+        if ($age !== null) {
+            return (int) $age;
+        }
+
+        if ($dateOfBirth === null) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($dateOfBirth)->age;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

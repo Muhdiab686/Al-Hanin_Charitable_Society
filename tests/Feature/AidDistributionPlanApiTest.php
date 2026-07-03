@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\UserRole;
+use App\Models\AidDistributionPlan;
 use App\Models\Beneficiary;
+use App\Models\Campaign;
 use App\Models\Family;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -109,5 +111,158 @@ class AidDistributionPlanApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('plan.eligible_families_count', 1)
             ->assertJsonCount(1, 'plan.lines');
+    }
+
+    public function test_plan_filter_can_prioritize_children_under_18_health_and_housing_status(): void
+    {
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+
+        $highPriorityFamily = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'has_direct_income' => false,
+            'housing_status' => 'rent',
+        ]);
+        $lowPriorityFamily = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'has_direct_income' => false,
+            'housing_status' => 'owned',
+        ]);
+
+        Beneficiary::factory()->create([
+            'family_id' => $highPriorityFamily->id,
+            'family_relationship' => 'child',
+            'age' => 12,
+            'health_status' => 'critical',
+        ]);
+        Beneficiary::factory()->create([
+            'family_id' => $highPriorityFamily->id,
+            'family_relationship' => 'mother',
+            'age' => 33,
+            'health_status' => 'stable',
+        ]);
+
+        Beneficiary::factory()->create([
+            'family_id' => $lowPriorityFamily->id,
+            'family_relationship' => 'child',
+            'age' => 19,
+            'health_status' => 'good',
+        ]);
+        Beneficiary::factory()->create([
+            'family_id' => $lowPriorityFamily->id,
+            'family_relationship' => 'father',
+            'age' => 45,
+            'health_status' => 'good',
+        ]);
+
+        $response = $this->postJson('/api/v1/aid-distribution-plans', [
+            'title' => 'Smart filter plan',
+            'aid_type' => 'special_item',
+            'distribution_date' => now()->toDateString(),
+            'distribution_frequency' => 'quarterly',
+            'total_units' => 12,
+            'filter_criteria' => [
+                'min_children_under_18' => 1,
+                'health_priority_only' => true,
+                'housing_statuses' => ['rent'],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk4')->plainTextToken,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('plan.eligible_families_count', 1)
+            ->assertJsonPath('plan.distribution_frequency', 'quarterly')
+            ->assertJsonPath('plan.cycles_per_year', 4)
+            ->assertJsonPath('plan.projected_annual_units', 48)
+            ->assertJsonCount(1, 'plan.lines');
+    }
+
+    public function test_storekeeper_can_mark_plan_cycle_as_completed(): void
+    {
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+
+        $plan = AidDistributionPlan::query()->create([
+            'title' => 'Quarterly food plan',
+            'aid_type' => 'special_item',
+            'distribution_date' => now()->toDateString(),
+            'distribution_frequency' => 'quarterly',
+            'cycles_per_year' => 4,
+            'eligible_families_count' => 2,
+            'total_units' => 20,
+            'projected_annual_units' => 80,
+            'status' => 'draft',
+            'completed_cycles' => 0,
+            'created_by' => $storekeeper->id,
+        ]);
+
+        $response = $this->patchJson("/api/v1/aid-distribution-plans/{$plan->id}/complete-cycle", [], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk5')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('plan.completed_cycles', 1)
+            ->assertJsonPath('plan.status', 'in_progress');
+    }
+
+    public function test_completed_plan_cycle_does_not_exceed_cycles_per_year(): void
+    {
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+
+        $plan = AidDistributionPlan::query()->create([
+            'title' => 'Annual school kits plan',
+            'aid_type' => 'special_item',
+            'distribution_date' => now()->toDateString(),
+            'distribution_frequency' => 'yearly',
+            'cycles_per_year' => 1,
+            'eligible_families_count' => 1,
+            'total_units' => 10,
+            'projected_annual_units' => 10,
+            'status' => 'in_progress',
+            'completed_cycles' => 1,
+            'created_by' => $storekeeper->id,
+        ]);
+
+        $response = $this->patchJson("/api/v1/aid-distribution-plans/{$plan->id}/complete-cycle", [], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk6')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('plan.completed_cycles', 1)
+            ->assertJsonPath('plan.status', 'completed');
+    }
+
+    public function test_recording_secretary_can_link_distribution_plan_to_campaign(): void
+    {
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+
+        $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
+        Beneficiary::factory()->create(['family_id' => $family->id, 'is_head_of_family' => true]);
+
+        $campaign = Campaign::query()->create([
+            'title' => 'Winter warmth',
+            'goal_amount' => 1000,
+            'raised_amount' => 0,
+            'spent_amount' => 0,
+            'status' => 'active',
+            'created_by' => $recordingSecretary->id,
+        ]);
+
+        $response = $this->postJson('/api/v1/aid-distribution-plans', [
+            'title' => 'Campaign-linked plan',
+            'aid_type' => 'special_item',
+            'campaign_id' => $campaign->id,
+            'distribution_date' => now()->toDateString(),
+            'total_units' => 10,
+        ], [
+            'Authorization' => 'Bearer '.$recordingSecretary->createToken('rs-plan')->plainTextToken,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('plan.campaign.id', $campaign->id)
+            ->assertJsonPath('plan.campaign.title', 'Winter warmth');
     }
 }

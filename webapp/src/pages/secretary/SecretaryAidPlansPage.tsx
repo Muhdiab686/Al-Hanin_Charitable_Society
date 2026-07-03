@@ -5,6 +5,7 @@ import { labelAidTypeAr, labelPlanStatusAr } from '../../lib/operationalLabels'
 
 export function SecretaryAidPlansPage() {
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
+  const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
   const [page, setPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -15,6 +16,12 @@ export function SecretaryAidPlansPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [units, setUnits] = useState('100')
   const [amount, setAmount] = useState('')
+  const [frequency, setFrequency] = useState<'once' | 'quarterly' | 'yearly'>('once')
+  const [minChildrenUnder18, setMinChildrenUnder18] = useState('')
+  const [minAdults, setMinAdults] = useState('')
+  const [housingStatuses, setHousingStatuses] = useState('')
+  const [healthPriorityOnly, setHealthPriorityOnly] = useState(false)
+  const [campaignId, setCampaignId] = useState('')
 
   const load = useCallback(async () => {
     setErr(null)
@@ -23,6 +30,13 @@ export function SecretaryAidPlansPage() {
       setRows((res.data as Record<string, unknown>[]) ?? [])
       setLastPage(Math.max(1, res.last_page))
       setTotal(res.total ?? 0)
+
+      try {
+        const campaignsRes = await api.fetchCampaigns()
+        setCampaigns((campaignsRes.data as Record<string, unknown>[]) ?? [])
+      } catch {
+        setCampaigns([])
+      }
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر التحميل'))
     }
@@ -40,7 +54,17 @@ export function SecretaryAidPlansPage() {
       title,
       aid_type: aidType,
       distribution_date: date,
+      distribution_frequency: frequency,
       notes: 'من الويب',
+      ...(campaignId ? { campaign_id: Number(campaignId) } : {}),
+      filter_criteria: {
+        ...(minChildrenUnder18 ? { min_children_under_18: Number(minChildrenUnder18) } : {}),
+        ...(minAdults ? { min_adults: Number(minAdults) } : {}),
+        ...(housingStatuses.trim()
+          ? { housing_statuses: housingStatuses.split(',').map((value) => value.trim()).filter(Boolean) }
+          : {}),
+        ...(healthPriorityOnly ? { health_priority_only: true } : {}),
+      },
       ...(aidType === 'urgent_financial'
         ? { total_amount: Number(amount || '500') }
         : { total_units: Number(units) }),
@@ -54,16 +78,28 @@ export function SecretaryAidPlansPage() {
     }
   }
 
+  async function onCompleteCycle(planId: number) {
+    setMsg(null)
+    setErr(null)
+    try {
+      await api.completeAidDistributionPlanCycle(planId)
+      setMsg('تم تحديث دورة التنفيذ للخطة.')
+      await load()
+    } catch (ex) {
+      setErr(extractErrorMessage(ex as Error, 'فشل تحديث تقدم الخطة'))
+    }
+  }
+
   function summaryCell(r: Record<string, unknown>): string {
     const amt = r.total_amount
     const unitsVal = r.total_units
     const fam = r.eligible_families_count
 
     if (amt != null && String(amt) !== '') {
-      return `إجمالي مبلغ: ${String(amt)} · عائلات: ${String(fam ?? '—')}`
+      return `الدورة: ${String(amt)} · سنوي: ${String(r.projected_annual_amount ?? '—')} · عائلات: ${String(fam ?? '—')}`
     }
     if (unitsVal != null && String(unitsVal) !== '') {
-      return `عدد الوحدات: ${String(unitsVal)} · عائلات: ${String(fam ?? '—')}`
+      return `الدورة: ${String(unitsVal)} وحدة · سنوي: ${String(r.projected_annual_units ?? '—')} · عائلات: ${String(fam ?? '—')}`
     }
 
     return `عائلات: ${String(fam ?? '—')}`
@@ -116,15 +152,19 @@ export function SecretaryAidPlansPage() {
               <tr className="border-b border-white/10 bg-black/30 text-[11px] uppercase tracking-wide text-white/45">
                 <th className="px-3 py-2.5 font-semibold">الخطة</th>
                 <th className="px-3 py-2.5 font-semibold">نوع المساعدة</th>
+                <th className="px-3 py-2.5 font-semibold">الحملة</th>
                 <th className="px-3 py-2.5 font-semibold">التاريخ</th>
+                <th className="px-3 py-2.5 font-semibold">الدورية</th>
                 <th className="px-3 py-2.5 font-semibold">الحالة</th>
                 <th className="px-3 py-2.5 font-semibold">الملخص</th>
+                <th className="px-3 py-2.5 font-semibold">التقدم السنوي</th>
+                <th className="px-3 py-2.5 font-semibold">إجراء</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-10 text-center text-white/50">
+                  <td colSpan={9} className="px-3 py-10 text-center text-white/50">
                     لا خطط بعد.
                   </td>
                 </tr>
@@ -139,12 +179,45 @@ export function SecretaryAidPlansPage() {
                       <span className="mt-0.5 block font-medium text-white">{String(r.title)}</span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-white/85">{labelAidTypeAr(r.aid_type)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-white/70">
+                      {String((r.campaign as { title?: string } | null)?.title ?? '—')}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-white/70">
                       {String(r.distribution_date ?? '—').slice(0, 10)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-white/80">
+                      {String(r.distribution_frequency ?? 'once') === 'quarterly'
+                        ? 'ربع سنوي'
+                        : String(r.distribution_frequency ?? 'once') === 'yearly'
+                          ? 'سنوي'
+                          : 'مرة واحدة'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-white/80">{labelPlanStatusAr(r.status)}</td>
                     <td className="max-w-[280px] px-3 py-2.5 text-[11px] leading-relaxed text-white/55">
                       {summaryCell(r)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="w-40">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-emerald-500"
+                            style={{ width: `${Math.min(100, Math.max(0, Number(r.progress_percentage ?? 0)))}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] text-white/70">
+                          {String(r.completed_cycles ?? 0)}/{String(r.cycles_per_year ?? 1)} دورة
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button
+                        type="button"
+                        disabled={String(r.status ?? '') === 'completed'}
+                        onClick={() => void onCompleteCycle(Number(r.id))}
+                        className="rounded-md bg-emerald-700 px-2 py-1 text-[11px] text-white disabled:opacity-40"
+                      >
+                        تسجيل دورة منفذة
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -185,6 +258,33 @@ export function SecretaryAidPlansPage() {
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-[11px] font-medium text-white/45">ربط الخطة بحملة (اختياري)</label>
+            <select
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={campaignId}
+              onChange={(e) => setCampaignId(e.target.value)}
+            >
+              <option value="">بدون حملة</option>
+              {campaigns.map((campaign) => (
+                <option key={String(campaign.id)} value={String(campaign.id)}>
+                  {String(campaign.title ?? `حملة #${String(campaign.id)}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-[11px] font-medium text-white/45">الدورية</label>
+            <select
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as 'once' | 'quarterly' | 'yearly')}
+            >
+              <option value="once">مرة واحدة</option>
+              <option value="quarterly">كل 3 أشهر</option>
+              <option value="yearly">سنوي</option>
+            </select>
+          </div>
           {aidType === 'urgent_financial' ? (
             <div className="sm:col-span-2">
               <label className="mb-1 block text-[11px] font-medium text-white/45">المبلغ الإجمالي</label>
@@ -206,6 +306,37 @@ export function SecretaryAidPlansPage() {
               />
             </div>
           )}
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-white/45">حد أدنى أطفال (&lt; 18)</label>
+            <input
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={minChildrenUnder18}
+              onChange={(e) => setMinChildrenUnder18(e.target.value)}
+              placeholder="مثال: 2"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-white/45">حد أدنى بالغين</label>
+            <input
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={minAdults}
+              onChange={(e) => setMinAdults(e.target.value)}
+              placeholder="مثال: 1"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-[11px] font-medium text-white/45">حالة السكن (مفصولة بفاصلة)</label>
+            <input
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={housingStatuses}
+              onChange={(e) => setHousingStatuses(e.target.value)}
+              placeholder="rent, displaced, temporary"
+            />
+          </div>
+          <label className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80">
+            <input type="checkbox" checked={healthPriorityOnly} onChange={(e) => setHealthPriorityOnly(e.target.checked)} />
+            إعطاء أولوية للحالات الصحية الحرجة فقط
+          </label>
           <button type="submit" className="rounded-lg bg-violet-600 py-2.5 font-medium text-white sm:col-span-2">
             إنشاء الخطة
           </button>

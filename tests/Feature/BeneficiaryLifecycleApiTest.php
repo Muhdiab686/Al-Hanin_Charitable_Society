@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\AidRequest;
 use App\Models\Beneficiary;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -101,7 +102,30 @@ class BeneficiaryLifecycleApiTest extends TestCase
             ->assertJsonPath('beneficiary_id', $beneficiary->id);
     }
 
-    public function test_secretary_cannot_list_beneficiaries_after_permission_change(): void
+    public function test_beneficiary_dashboard_includes_requested_materials_with_aid_type_alias(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::Beneficiary]);
+        $user->syncRoles([UserRole::Beneficiary->value]);
+        $beneficiary = Beneficiary::factory()->create(['user_id' => $user->id]);
+        AidRequest::query()->create([
+            'beneficiary_id' => $beneficiary->id,
+            'created_by' => $user->id,
+            'type' => 'medical_prescription',
+            'description' => 'Need medicine support',
+            'status' => 'pending',
+        ]);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $response = $this->getJson('/api/v1/beneficiary/dashboard', [
+            'Authorization' => 'Bearer '.$token,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('requested_materials.0.aid_type', 'medical_prescription')
+            ->assertJsonPath('requested_materials.0.status', 'pending');
+    }
+
+    public function test_secretary_can_list_beneficiaries_for_clinic_and_medical_workflow(): void
     {
         $secretary = User::factory()->create(['role' => UserRole::Secretary]);
         $secretary->syncRoles([UserRole::Secretary->value]);
@@ -109,6 +133,66 @@ class BeneficiaryLifecycleApiTest extends TestCase
 
         $this->getJson('/api/v1/beneficiaries', [
             'Authorization' => 'Bearer '.$token,
-        ])->assertForbidden();
+        ])->assertOk();
+    }
+
+    public function test_admin_can_create_family_with_members_in_single_request(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $admin->syncRoles([UserRole::Admin->value]);
+        $token = $admin->createToken('test')->plainTextToken;
+
+        $response = $this->postJson('/api/v1/beneficiaries', [
+            'family' => [
+                'head_name' => 'عائلة الاختبار',
+                'phone' => '0599000001',
+                'address' => 'غزة - الرمال',
+                'members_count' => 3,
+                'monthly_income' => 500,
+                'enrollment_status' => 'pending_board',
+            ],
+            'beneficiary' => [
+                'national_id' => 'HEAD-001',
+                'name' => 'رب الأسرة',
+                'family_relationship' => 'head',
+                'is_head_of_family' => true,
+                'phone' => '0599000001',
+            ],
+            'members' => [
+                [
+                    'national_id' => 'SP-001',
+                    'name' => 'الزوجة',
+                    'family_relationship' => 'spouse',
+                    'gender' => 'female',
+                ],
+                [
+                    'national_id' => 'CH-001',
+                    'name' => 'الابن',
+                    'family_relationship' => 'child',
+                    'gender' => 'male',
+                ],
+            ],
+        ], ['Authorization' => 'Bearer '.$token]);
+
+        $response->assertCreated()
+            ->assertJsonPath('credentials.email', fn ($email): bool => is_string($email) && str_contains($email, '@'))
+            ->assertJsonPath('credentials.password', fn ($password): bool => is_string($password) && strlen($password) >= 8);
+
+        $familyId = (int) $response->json('beneficiary.family_id');
+        $headBeneficiaryId = (int) $response->json('beneficiary.id');
+        $this->assertDatabaseHas('families', [
+            'id' => $familyId,
+            'members_count' => 3,
+            'system_generated_credentials' => true,
+        ]);
+        $this->assertDatabaseHas('beneficiaries', [
+            'family_id' => $familyId,
+            'national_id' => 'SP-001',
+        ]);
+        $this->assertDatabaseHas('beneficiaries', [
+            'family_id' => $familyId,
+            'national_id' => 'CH-001',
+        ]);
+        $this->assertNotNull(Beneficiary::query()->findOrFail($headBeneficiaryId)->user_id);
     }
 }

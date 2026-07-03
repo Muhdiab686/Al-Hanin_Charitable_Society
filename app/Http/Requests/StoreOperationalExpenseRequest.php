@@ -22,6 +22,7 @@ class StoreOperationalExpenseRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:500'],
             'invoice_reference' => ['nullable', 'string', 'max:128'],
             'vendor' => ['nullable', 'string', 'max:255'],
+            'campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

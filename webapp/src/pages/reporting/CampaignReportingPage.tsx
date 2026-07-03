@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
+import { useAuth } from '../../auth/useAuth'
 import { extractErrorMessage } from '../../api/client'
 import type { CampaignReportingResponse } from '../../api/services'
 import * as api from '../../api/services'
@@ -16,17 +17,58 @@ function formatInt(n: number): string {
   return new Intl.NumberFormat('ar-IQ').format(n)
 }
 
+function statusLabelAr(status: string): string {
+  if (status === 'completed') {
+    return 'مكتملة'
+  }
+  if (status === 'paused') {
+    return 'متوقفة'
+  }
+  return 'نشطة'
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === 'completed') {
+    return 'border-emerald-300/35 bg-emerald-500/15 text-emerald-100'
+  }
+  if (status === 'paused') {
+    return 'border-amber-300/35 bg-amber-500/15 text-amber-100'
+  }
+  return 'border-sky-300/35 bg-sky-500/15 text-sky-100'
+}
+
 export function CampaignReportingPage() {
+  const { user } = useAuth()
+  const canManageCampaigns = user?.role === 'recording_secretary'
   const [data, setData] = useState<CampaignReportingResponse | null>(null)
+  const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [campaignMsg, setCampaignMsg] = useState<string | null>(null)
+  const [campaignErr, setCampaignErr] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [goalAmount, setGoalAmount] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+
+  async function loadCampaigns() {
+    try {
+      const response = await api.fetchCampaigns()
+      setCampaigns((response.data as Record<string, unknown>[]) ?? [])
+    } catch {
+      setCampaigns([])
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setError(null)
       try {
-        const d = await api.fetchCampaignReporting()
+        const [d] = await Promise.all([
+          api.fetchCampaignReporting(),
+          loadCampaigns(),
+        ])
         if (!cancelled) {
           setData(d)
         }
@@ -45,6 +87,30 @@ export function CampaignReportingPage() {
       cancelled = true
     }
   }, [])
+
+  async function onCreateCampaign(e: FormEvent) {
+    e.preventDefault()
+    setCampaignErr(null)
+    setCampaignMsg(null)
+
+    try {
+      await api.createCampaign({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        goal_amount: Number(goalAmount),
+        ends_at: endsAt || undefined,
+        status: 'active',
+      })
+      setCampaignMsg('تم إنشاء الحملة بنجاح.')
+      setTitle('')
+      setDescription('')
+      setGoalAmount('')
+      setEndsAt('')
+      await loadCampaigns()
+    } catch (e) {
+      setCampaignErr(extractErrorMessage(e, 'فشل إنشاء الحملة'))
+    }
+  }
 
   const cashSeries: ChartDatum[] =
     data?.cash_by_campaign_tag?.map((r) => ({
@@ -78,6 +144,84 @@ export function CampaignReportingPage() {
 
   return (
     <div className="space-y-10 text-sm text-white/80">
+      {canManageCampaigns ? (
+        <section className="rounded-2xl border border-white/12 bg-black/28 p-5">
+          <h3 className="text-base font-semibold text-white">إدارة الحملات (أمين السر)</h3>
+          {(campaignMsg || campaignErr) ? (
+            <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${campaignErr ? 'bg-rose-500/15 text-rose-100' : 'bg-emerald-500/15 text-emerald-100'}`}>
+              {campaignErr ?? campaignMsg}
+            </p>
+          ) : null}
+          <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onCreateCampaign}>
+            <input
+              className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              placeholder="عنوان الحملة"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+            <input
+              className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              placeholder="المبلغ المستهدف"
+              value={goalAmount}
+              onChange={(e) => setGoalAmount(e.target.value)}
+              required
+            />
+            <input
+              type="date"
+              className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+            />
+            <textarea
+              className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              rows={2}
+              placeholder="هدف الحملة ووصفها"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <button type="submit" className="sm:col-span-2 rounded-lg bg-violet-600 py-2 font-semibold text-white">
+              إنشاء الحملة
+            </button>
+          </form>
+
+          <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+            {campaigns.map((campaign) => (
+              <div key={String(campaign.id)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-white">{String(campaign.title ?? `حملة #${String(campaign.id)}`)}</p>
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusBadgeClass(String(campaign.status ?? 'active'))}`}
+                  >
+                    {statusLabelAr(String(campaign.status ?? 'active'))}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-white/50">
+                  كود الحملة: CMP-{String(campaign.id)} {campaign.ends_at ? `• إغلاق: ${String(campaign.ends_at)}` : ''}
+                </p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-fuchsia-500"
+                    style={{ width: `${Math.min(100, Math.max(0, Number(campaign.progress_percentage ?? 0)))}%` }}
+                  />
+                </div>
+                <div className="mt-2 grid gap-2 text-[11px] text-white/75 sm:grid-cols-3">
+                  <p>
+                    تم جمع: <span className="font-mono text-white">{String(campaign.raised_amount ?? '0')}</span>
+                  </p>
+                  <p>
+                    المتبقي: <span className="font-mono text-white">{String(Math.max(0, Number(campaign.goal_amount ?? 0) - Number(campaign.raised_amount ?? 0)))}</span>
+                  </p>
+                  <p>
+                    رصيد المحفظة: <span className="font-mono text-white">{String(campaign.wallet_balance ?? '0')}</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <header className="space-y-2">
         <h2 className="text-xl font-bold text-white">لوحة تقارير الحملات وأثر التوعية</h2>
         <p className="max-w-prose leading-relaxed text-white/62">

@@ -14,11 +14,17 @@ class AidDistributionPlan extends Model
     protected $fillable = [
         'title',
         'aid_type',
+        'campaign_id',
         'distribution_date',
+        'distribution_frequency',
+        'cycles_per_year',
         'eligible_families_count',
         'total_amount',
+        'projected_annual_amount',
         'total_units',
+        'projected_annual_units',
         'status',
+        'completed_cycles',
         'notes',
         'created_by',
         'filter_criteria',
@@ -31,7 +37,11 @@ class AidDistributionPlan extends Model
     {
         return [
             'distribution_date' => 'date',
+            'cycles_per_year' => 'integer',
             'total_amount' => 'decimal:2',
+            'projected_annual_amount' => 'decimal:2',
+            'projected_annual_units' => 'integer',
+            'completed_cycles' => 'integer',
             'filter_criteria' => 'array',
         ];
     }
@@ -39,6 +49,11 @@ class AidDistributionPlan extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(AidDistributionPlanLine::class);
+    }
+
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
     }
 
     public function creator(): BelongsTo

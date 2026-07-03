@@ -60,8 +60,11 @@ class BeneficiaryOnboardingController extends Controller
         ]);
     }
 
-    public function approve(Request $request, Family $family): JsonResponse
-    {
+    public function approve(
+        Request $request,
+        Family $family,
+        BeneficiaryAccountService $accountService
+    ): JsonResponse {
         abort_unless(
             $request->user()->hasPermissionTo('families.enrollment.review'),
             403,
@@ -83,10 +86,12 @@ class BeneficiaryOnboardingController extends Controller
         ])->save();
 
         $family->beneficiaries()->update(['status' => 'active']);
+        $credentials = $accountService->createCredentialsForFamilyIfMissing($family);
 
         return response()->json([
             'message' => __('Beneficiary application approved successfully.'),
             'family' => $family->fresh()->load('beneficiaries'),
+            'credentials' => $credentials,
         ]);
     }
 

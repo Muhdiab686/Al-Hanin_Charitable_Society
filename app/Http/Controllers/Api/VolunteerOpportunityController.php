@@ -20,6 +20,7 @@ class VolunteerOpportunityController extends Controller
     {
         $query = VolunteerOpportunity::query()
             ->withCount(['registrations', 'linkedBeneficiaries'])
+            ->with('linkedBeneficiaries:id,name')
             ->with('creator:id,name,email')
             ->latest();
 

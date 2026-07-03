@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AidRequestController;
 use App\Http\Controllers\Api\AppointmentController;
+use App\Http\Controllers\Api\MedicalPrescriptionWorkflowController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/secretary')->middleware(['auth:sanctum', 'role:secretary'])->group(function () {
@@ -13,6 +14,11 @@ Route::prefix('v1/secretary')->middleware(['auth:sanctum', 'role:secretary'])->g
         ->middleware('permission:appointments.manage');
     Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
         ->middleware('permission:appointments.manage');
+
+    Route::get('/medical-prescriptions', [MedicalPrescriptionWorkflowController::class, 'index'])
+        ->middleware('permission:appointments.manage');
+    Route::patch('/medical-prescriptions/{medicalRecord}/review', [MedicalPrescriptionWorkflowController::class, 'review'])
+        ->middleware('permission:appointments.manage|medical.records.manage');
 
     Route::get('/aid-requests', [AidRequestController::class, 'index'])
         ->middleware('permission:aid.request.review');

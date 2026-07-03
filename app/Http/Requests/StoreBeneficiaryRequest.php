@@ -46,6 +46,16 @@ class StoreBeneficiaryRequest extends FormRequest
             'beneficiary.family_relationship' => ['nullable', 'string', Rule::enum(FamilyRelationship::class)],
             'beneficiary.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
             'beneficiary.category_id' => ['nullable', 'exists:categories,id'],
+
+            'members' => ['nullable', 'array'],
+            'members.*.national_id' => ['required_with:members', 'string', 'max:100', 'unique:beneficiaries,national_id'],
+            'members.*.name' => ['required_with:members', 'string', 'max:255'],
+            'members.*.family_relationship' => ['required_with:members', 'string', Rule::enum(FamilyRelationship::class)],
+            'members.*.date_of_birth' => ['nullable', 'date'],
+            'members.*.phone' => ['nullable', 'string', 'max:50'],
+            'members.*.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
+            'members.*.notes' => ['nullable', 'string'],
+            'members.*.category_id' => ['nullable', 'exists:categories,id'],
         ];
     }
 }

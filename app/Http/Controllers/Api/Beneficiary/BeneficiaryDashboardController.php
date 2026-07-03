@@ -18,7 +18,7 @@ class BeneficiaryDashboardController extends Controller
         $upcomingAppointments = ClinicAppointment::query()
             ->where('beneficiary_id', $beneficiary->id)
             ->where('scheduled_at', '>=', now())
-            ->whereIn('workflow_status', ['scheduled', 'pending_approval'])
+            ->whereIn('workflow_status', ['scheduled', 'pending_approval', 'reschedule_proposed'])
             ->with(['doctor:id,name', 'doctor.clinicStaffProfile:user_id,specialty'])
             ->orderBy('scheduled_at')
             ->limit(10)
@@ -28,7 +28,7 @@ class BeneficiaryDashboardController extends Controller
             ->where('beneficiary_id', $beneficiary->id)
             ->latest()
             ->limit(10)
-            ->get(['id', 'aid_type', 'status', 'created_at', 'description']);
+            ->get(['id', 'type as aid_type', 'status', 'created_at', 'description']);
 
         $family = $beneficiary->family;
 

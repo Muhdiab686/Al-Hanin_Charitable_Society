@@ -12,6 +12,8 @@ class CampaignController extends Controller
 {
     public function index(): JsonResponse
     {
+        $this->syncAutoCompletedCampaigns();
+
         $campaigns = Campaign::query()
             ->with('creator:id,name')
             ->latest()
@@ -32,22 +34,27 @@ class CampaignController extends Controller
             ...$validated,
             'created_by' => $request->user()->id,
         ]);
+        $campaign->autoCompleteIfEligible();
 
         return response()->json([
             'message' => __('Campaign created successfully.'),
-            'campaign' => $this->serializeCampaign($campaign->load('creator:id,name')),
+            'campaign' => $this->serializeCampaign($campaign->fresh()->load('creator:id,name')),
         ], 201);
     }
 
     public function show(Campaign $campaign): JsonResponse
     {
+        $campaign->autoCompleteIfEligible();
+
         return response()->json([
-            'campaign' => $this->serializeCampaign($campaign->load('creator:id,name')),
+            'campaign' => $this->serializeCampaign($campaign->fresh()->load('creator:id,name')),
         ]);
     }
 
     public function publicIndex(Request $request): JsonResponse
     {
+        $this->syncAutoCompletedCampaigns();
+
         $campaigns = Campaign::query()
             ->where('status', 'active')
             ->orderByDesc('starts_at')
@@ -68,6 +75,8 @@ class CampaignController extends Controller
             'description' => $campaign->description,
             'goal_amount' => $campaign->goal_amount,
             'raised_amount' => $campaign->raised_amount,
+            'spent_amount' => $campaign->spent_amount,
+            'wallet_balance' => $campaign->walletBalance(),
             'progress_percentage' => $campaign->progressPercentage(),
             'status' => $campaign->status,
             'starts_at' => $campaign->starts_at?->toDateString(),
@@ -75,5 +84,16 @@ class CampaignController extends Controller
             'image_url' => $campaign->image_url,
             'creator' => $campaign->creator,
         ];
+    }
+
+    private function syncAutoCompletedCampaigns(): void
+    {
+        Campaign::query()
+            ->where('status', 'active')
+            ->where(function ($query): void {
+                $query->whereColumn('raised_amount', '>=', 'goal_amount')
+                    ->orWhereDate('ends_at', '<', now()->toDateString());
+            })
+            ->update(['status' => 'completed']);
     }
 }

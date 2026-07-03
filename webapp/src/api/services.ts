@@ -169,8 +169,17 @@ export async function uploadBeneficiaryLabReport(
 export async function createBeneficiary(payload: {
   family: Record<string, unknown>
   beneficiary: Record<string, unknown>
-}): Promise<unknown> {
-  const { data } = await apiClient.post(`${v1}/beneficiaries`, payload)
+  members?: Array<Record<string, unknown>>
+}): Promise<{
+  beneficiary: Record<string, unknown>
+  credentials?: { email: string; password: string } | null
+  message?: string
+}> {
+  const { data } = await apiClient.post<{
+    beneficiary: Record<string, unknown>
+    credentials?: { email: string; password: string } | null
+    message?: string
+  }>(`${v1}/beneficiaries`, payload)
   return data
 }
 
@@ -212,8 +221,8 @@ export async function creditBeneficiaryMedicalWallet(
 export async function updateFamilyEnrollmentStatus(
   familyId: number,
   payload: { enrollment_status: string },
-): Promise<unknown> {
-  const { data } = await apiClient.patch(
+): Promise<{ family: Record<string, unknown>; credentials?: { email: string; password: string } | null; message?: string }> {
+  const { data } = await apiClient.patch<{ family: Record<string, unknown>; credentials?: { email: string; password: string } | null; message?: string }>(
     `${v1}/families/${familyId}/enrollment-status`,
     payload,
   )
@@ -246,6 +255,21 @@ export async function fetchFamilyMembers(familyId: number): Promise<{
   const { data } = await apiClient.get<{ family: Record<string, unknown>; members: Record<string, unknown>[] }>(
     `${v1}/families/${familyId}/members`,
   )
+  return data
+}
+
+export async function fetchFamilyHistory(familyId: number): Promise<{
+  family: Record<string, unknown>
+  aid_requests: Record<string, unknown>[]
+  medical_records: Record<string, unknown>[]
+  summary: Record<string, unknown>
+}> {
+  const { data } = await apiClient.get<{
+    family: Record<string, unknown>
+    aid_requests: Record<string, unknown>[]
+    medical_records: Record<string, unknown>[]
+    summary: Record<string, unknown>
+  }>(`${v1}/families/${familyId}/history`)
   return data
 }
 
@@ -391,6 +415,11 @@ export async function createAidDistributionPlan(payload: Record<string, unknown>
   return data
 }
 
+export async function completeAidDistributionPlanCycle(planId: number): Promise<unknown> {
+  const { data } = await apiClient.patch(`${v1}/aid-distribution-plans/${planId}/complete-cycle`)
+  return data
+}
+
 export async function fetchCategoryRules(): Promise<{
   categories: Record<string, unknown>[]
 }> {
@@ -425,6 +454,17 @@ export async function fetchDonations(params?: {
 
 export async function fetchDonation(id: number): Promise<Record<string, unknown>> {
   const { data } = await apiClient.get<Record<string, unknown>>(`${v1}/donations/${id}`)
+  return data
+}
+
+export async function fetchDonationReceiptQr(id: number): Promise<{
+  payload: string
+  png_base64: string
+  mime_type: string
+}> {
+  const { data } = await apiClient.get<{ payload: string; png_base64: string; mime_type: string }>(
+    `${v1}/donations/${id}/receipt-qr`,
+  )
   return data
 }
 
@@ -474,6 +514,7 @@ export async function upsertClinicStaff(payload: {
   consultation_fee: number
   is_active: boolean
   role: string
+  available_days?: string[]
 }): Promise<unknown> {
   const { data } = await apiClient.put(`${v1}/clinic/staff`, payload)
   return data
@@ -524,9 +565,21 @@ export async function cancelAppointment(
   return data
 }
 
+export async function approveAppointment(
+  appointmentId: number,
+  payload: { doctor_id: number; scheduled_at: string },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(
+    `${v1}/appointments/${appointmentId}/approve`,
+    payload,
+  )
+  return data
+}
+
 export async function fetchMedicalRecords(params?: {
   page?: number
   beneficiary_id?: number
+  workflow_status?: string
 }): Promise<Paginated<Record<string, unknown>>> {
   const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
     `${v1}/medical-records`,
@@ -547,8 +600,67 @@ export async function createMedicalRecord(payload: {
   return data
 }
 
+export async function fetchMedicalPrescriptionRequests(params?: {
+  page?: number
+  beneficiary_id?: number
+  workflow_status?: string
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
+    `${v1}/medical-prescriptions`,
+    { params },
+  )
+  return data
+}
+
+export async function fetchSecretaryMedicalPrescriptionRequests(params?: {
+  page?: number
+  beneficiary_id?: number
+  workflow_status?: string
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
+    `${v1}/secretary/medical-prescriptions`,
+    { params },
+  )
+  return data
+}
+
+export async function fetchAccountantMedicalPrescriptionRequests(params?: {
+  page?: number
+  beneficiary_id?: number
+  workflow_status?: string
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
+    `${v1}/accountant/medical-prescriptions`,
+    { params },
+  )
+  return data
+}
+
+export async function reviewMedicalPrescription(
+  medicalRecordId: number,
+  payload: { decision: 'approved' | 'rejected'; review_note?: string | null },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(
+    `${v1}/medical-prescriptions/${medicalRecordId}/review`,
+    payload,
+  )
+  return data
+}
+
+export async function disburseMedicalPrescription(
+  medicalRecordId: number,
+  payload?: { notes?: string | null },
+): Promise<unknown> {
+  const { data } = await apiClient.post(
+    `${v1}/medical-prescriptions/${medicalRecordId}/disburse`,
+    payload ?? {},
+  )
+  return data
+}
+
 export async function fetchDoctorPayoutRequests(params?: {
   page?: number
+  status?: string
 }): Promise<Paginated<Record<string, unknown>>> {
   const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
     `${v1}/doctor-payout-requests`,
@@ -596,6 +708,7 @@ export async function createOperationalExpense(payload: {
   description?: string
   invoice_reference?: string
   vendor?: string
+  campaign_id?: number
   notes?: string
 }): Promise<unknown> {
   const { data } = await apiClient.post(`${v1}/finance/expenses`, payload)
@@ -699,6 +812,7 @@ export async function registerForOpportunity(opportunityId: number): Promise<unk
 export type DonorChatMessageDto = {
   id: number
   body: string
+  recipient_role?: 'accountant' | 'recording_secretary'
   is_from_donor: boolean
   created_at: string | null
   sender: { id: number; name: string } | null
@@ -759,8 +873,34 @@ export async function fetchBeneficiaryDashboard(): Promise<Record<string, unknow
   return data
 }
 
+export async function fetchNotifications(params?: {
+  page?: number
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(`${v1}/notifications`, { params })
+  return data
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<unknown> {
+  const { data } = await apiClient.patch(`${v1}/notifications/${notificationId}/read`)
+  return data
+}
+
+export async function markAllNotificationsAsRead(): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/notifications/read-all`)
+  return data
+}
+
 export async function fetchBeneficiaryProfileStatus(): Promise<Record<string, unknown>> {
   const { data } = await apiClient.get(`${v1}/beneficiary/profile-status`)
+  return data
+}
+
+export async function confirmBeneficiaryAidDeliveryByQr(payload: {
+  payload: string
+  aid_request_id?: number
+  delivery_note?: string
+}): Promise<unknown> {
+  const { data } = await apiClient.post(`${v1}/beneficiary/aid-deliveries/confirm-by-qr`, payload)
   return data
 }
 
@@ -793,6 +933,23 @@ export async function fetchCampaigns(): Promise<Paginated<Record<string, unknown
   return data
 }
 
+export async function createCampaign(payload: {
+  title: string
+  description?: string
+  goal_amount: number
+  status?: 'active' | 'paused' | 'completed'
+  starts_at?: string
+  ends_at?: string
+}): Promise<{ campaign: Record<string, unknown>; message?: string }> {
+  const { data } = await apiClient.post<{ campaign: Record<string, unknown>; message?: string }>(`${v1}/campaigns`, payload)
+  return data
+}
+
+export async function fetchDonorCampaigns(): Promise<Record<string, unknown>[]> {
+  const { data } = await apiClient.get<{ campaigns: Record<string, unknown>[] }>(`${v1}/donor/campaigns`)
+  return data.campaigns ?? []
+}
+
 export async function createStripeCheckout(payload: {
   amount: number
   donor_name?: string
@@ -805,10 +962,51 @@ export async function createStripeCheckout(payload: {
 }
 
 export async function requestBeneficiaryAppointment(payload: {
+  doctor_id: number
   requested_specialty: string
   reason?: string
   preferred_date?: string
 }): Promise<unknown> {
   const { data } = await apiClient.post(`${v1}/appointments/request`, payload)
+  return data
+}
+
+export async function fetchAppointmentDoctors(params?: {
+  specialty?: string
+}): Promise<Record<string, unknown>[]> {
+  const { data } = await apiClient.get<{ doctors: Record<string, unknown>[] }>(`${v1}/appointments/doctors`, {
+    params,
+  })
+  return data.doctors ?? []
+}
+
+export async function proposeAppointmentReschedule(
+  appointmentId: number,
+  payload: { doctor_id: number; scheduled_at: string; proposal_note?: string | null },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(`${v1}/appointments/${appointmentId}/propose-reschedule`, payload)
+  return data
+}
+
+export async function respondAppointmentReschedule(
+  appointmentId: number,
+  payload: { decision: 'accepted' | 'rejected' },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(`${v1}/appointments/${appointmentId}/respond-reschedule`, payload)
+  return data
+}
+
+export async function fetchDoctorClinicProfile(): Promise<Record<string, unknown> | null> {
+  const { data } = await apiClient.get<{ profile: Record<string, unknown> | null }>(`${v1}/doctor/profile`)
+  return data.profile
+}
+
+export async function updateDoctorClinicProfile(payload: {
+  specialty: string
+  consultation_fee: number
+  bio?: string | null
+  available_days: string[]
+}): Promise<unknown> {
+  const { data } = await apiClient.put(`${v1}/doctor/profile`, payload)
   return data
 }

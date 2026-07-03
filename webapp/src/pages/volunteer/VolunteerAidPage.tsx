@@ -1,10 +1,12 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import { badgeClassForAidStatus, labelAidStatusAr, labelAidTypeAr } from '../../lib/operationalLabels'
 
 export function VolunteerAidPage() {
   const [aids, setAids] = useState<Record<string, unknown>[]>([])
+  const [beneficiaries, setBeneficiaries] = useState<Record<string, unknown>[]>([])
+  const [inventoryItems, setInventoryItems] = useState<Record<string, unknown>[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [benId, setBenId] = useState('')
@@ -14,14 +16,57 @@ export function VolunteerAidPage() {
   const [invId, setInvId] = useState('')
   const [qty, setQty] = useState('2')
   const [delivAid, setDelivAid] = useState('')
-  const [allocIds, setAllocIds] = useState('')
+  const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
   const [files, setFiles] = useState<FileList | null>(null)
+
+  const deliveryAllocationOptions = useMemo(() => {
+    if (!delivAid) {
+      return []
+    }
+
+    const selectedAid = aids.find((aid) => String(aid.id) === delivAid)
+    if (!selectedAid) {
+      return []
+    }
+
+    const keys = ['allocations', 'distribution_allocations', 'inventory_allocations', 'aid_allocations']
+    for (const key of keys) {
+      const raw = selectedAid[key as keyof typeof selectedAid]
+      if (!Array.isArray(raw)) {
+        continue
+      }
+
+      return raw
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return null
+          }
+          const record = entry as Record<string, unknown>
+          if (record.id == null) {
+            return null
+          }
+          return {
+            id: String(record.id),
+            label: `#${String(record.id)} — ${String(record.status ?? (record.delivered_at ? 'delivered' : 'pending'))}`,
+          }
+        })
+        .filter((entry): entry is { id: string; label: string } => entry !== null)
+    }
+
+    return []
+  }, [aids, delivAid])
 
   async function load() {
     setErr(null)
     try {
-      const res = await api.fetchAidRequests({ page: 1 })
+      const [res, ben, inv] = await Promise.all([
+        api.fetchAidRequests({ page: 1 }),
+        api.fetchBeneficiaries({ page: 1 }),
+        api.fetchInventoryItems({ page: 1 }),
+      ])
       setAids((res.data as Record<string, unknown>[]) ?? [])
+      setBeneficiaries((ben.data as Record<string, unknown>[]) ?? [])
+      setInventoryItems((inv.data as Record<string, unknown>[]) ?? [])
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر التحميل'))
     }
@@ -69,7 +114,7 @@ export function VolunteerAidPage() {
     setMsg(null)
     setErr(null)
     try {
-      const ids = allocIds.split(',').map((s) => Number(s.trim())).filter(Boolean)
+      const ids = selectedAllocationIds.map((id) => Number(id)).filter(Boolean)
       await api.confirmAidDelivery(Number(delivAid), { allocation_ids: ids })
       setMsg('تم التسليم.')
       await load()
@@ -124,12 +169,19 @@ export function VolunteerAidPage() {
         <p className="mt-1 text-xs text-white/50">يمكن إرفاق تقارير أو صور (مثلاً وثائق عملية) — حتى 5 ملفات.</p>
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={onCreate}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">معرّف المستفيد</span>
-            <input
+            <span className="text-[11px] text-white/55">المستفيد</span>
+            <select
               className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
               value={benId}
               onChange={(e) => setBenId(e.target.value)}
-            />
+            >
+              <option value="">اختر مستفيداً</option>
+              {beneficiaries.map((beneficiary) => (
+                <option key={String(beneficiary.id)} value={String(beneficiary.id)}>
+                  {String(beneficiary.name ?? 'مستفيد')} (#{String(beneficiary.id)})
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] text-white/55">نوع الطلب</span>
@@ -172,12 +224,34 @@ export function VolunteerAidPage() {
         <p className="mt-1 text-xs text-white/50">بعد موافقة الإدارة: ربط أصناف من المخزون بالطلب قبل التسليم.</p>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={onDist}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">رقم طلب المساعدة</span>
-            <input className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white" value={aidId} onChange={(e) => setAidId(e.target.value)} />
+            <span className="text-[11px] text-white/55">طلب المساعدة</span>
+            <select
+              className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+              value={aidId}
+              onChange={(e) => setAidId(e.target.value)}
+            >
+              <option value="">اختر طلب المساعدة</option>
+              {aids.map((aid) => (
+                <option key={String(aid.id)} value={String(aid.id)}>
+                  #{String(aid.id)} — {String(aid.type ?? '—')} — {String(aid.status ?? '—')}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">رقم صنف المخزون</span>
-            <input className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white" value={invId} onChange={(e) => setInvId(e.target.value)} />
+            <span className="text-[11px] text-white/55">صنف المخزون</span>
+            <select
+              className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+              value={invId}
+              onChange={(e) => setInvId(e.target.value)}
+            >
+              <option value="">اختر الصنف</option>
+              {inventoryItems.map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  #{String(item.id)} — {String(item.name ?? 'صنف')} (متبقي: {String(item.quantity_remaining ?? '0')})
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] text-white/55">الكمية</span>
@@ -188,15 +262,48 @@ export function VolunteerAidPage() {
       </section>
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="font-semibold text-white">تأكيد تسليم للمستفيد</h2>
-        <p className="mt-1 text-xs text-white/50">أدخل معرّفات التوزيع (مفصولة بفاصلة) بعد استلام المستفيد للمواد.</p>
+        <p className="mt-1 text-xs text-white/50">اختر تخصيصات التوزيع للطلب بعد استلام المستفيد للمواد.</p>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={onDeliv}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/55">رقم الطلب</span>
-            <input className="w-24 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white" value={delivAid} onChange={(e) => setDelivAid(e.target.value)} />
+            <span className="text-[11px] text-white/55">الطلب</span>
+            <select
+              className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+              value={delivAid}
+              onChange={(e) => {
+                setDelivAid(e.target.value)
+                setSelectedAllocationIds([])
+              }}
+            >
+              <option value="">اختر الطلب</option>
+              {aids.map((aid) => (
+                <option key={String(aid.id)} value={String(aid.id)}>
+                  #{String(aid.id)} — {String(aid.type ?? '—')} — {String(aid.status ?? '—')}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex min-w-[200px] flex-1 flex-col gap-1">
-            <span className="text-[11px] text-white/55">معرّفات التوزيع (1,2,3)</span>
-            <input className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white" value={allocIds} onChange={(e) => setAllocIds(e.target.value)} />
+            <span className="text-[11px] text-white/55">تخصيصات التوزيع</span>
+            <select
+              multiple
+              className="min-h-[110px] rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+              value={selectedAllocationIds}
+              onChange={(e) =>
+                setSelectedAllocationIds(Array.from(e.target.selectedOptions).map((option) => option.value))
+              }
+            >
+              {deliveryAllocationOptions.length === 0 ? (
+                <option value="" disabled>
+                  لا توجد تخصيصات ظاهرة لهذا الطلب حالياً
+                </option>
+              ) : (
+                deliveryAllocationOptions.map((allocation) => (
+                  <option key={allocation.id} value={allocation.id}>
+                    {allocation.label}
+                  </option>
+                ))
+              )}
+            </select>
           </label>
           <button type="submit" className="rounded-lg bg-cyan-600 px-4 py-2 text-white">تأكيد التسليم</button>
         </form>

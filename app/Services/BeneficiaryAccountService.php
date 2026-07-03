@@ -129,6 +129,51 @@ class BeneficiaryAccountService
         return $number;
     }
 
+    /**
+     * @return array{email: string, password: string}|null
+     */
+    public function createCredentialsForFamilyIfMissing(Family $family, bool $markBeneficiaryActive = true): ?array
+    {
+        $headBeneficiary = Beneficiary::query()
+            ->where('family_id', $family->id)
+            ->orderByDesc('is_head_of_family')
+            ->orderBy('id')
+            ->first();
+
+        if ($headBeneficiary === null || $headBeneficiary->user_id !== null) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($family, $headBeneficiary, $markBeneficiaryActive): array {
+            $email = $this->generateUniqueEmail($headBeneficiary->name ?: $family->head_name);
+            $password = Str::password(12);
+
+            $user = User::query()->create([
+                'name' => $headBeneficiary->name ?: $family->head_name,
+                'email' => $email,
+                'password' => Hash::make($password),
+                'role' => UserRole::Beneficiary,
+            ]);
+            $user->syncRoles([UserRole::Beneficiary->value]);
+
+            $beneficiaryAttributes = [
+                'user_id' => $user->id,
+            ];
+            if ($markBeneficiaryActive) {
+                $beneficiaryAttributes['status'] = 'active';
+            }
+
+            $headBeneficiary->forceFill($beneficiaryAttributes)->save();
+
+            $family->forceFill(['system_generated_credentials' => true])->save();
+
+            return [
+                'email' => $email,
+                'password' => $password,
+            ];
+        });
+    }
+
     private function generateUniqueEmail(string $name): string
     {
         $slug = Str::slug($name, '.');

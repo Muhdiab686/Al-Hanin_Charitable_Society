@@ -3,8 +3,19 @@ import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import type { Paginated } from '../../types/models'
 
+const WEEKDAY_OPTIONS = [
+  'Saturday',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+]
+
 function apptStatusAr(s: string): string {
   const m: Record<string, string> = {
+    pending: 'بانتظار الاعتماد',
     scheduled: 'مجدول',
     cancelled: 'ملغى',
     completed: 'مُنجَز',
@@ -30,6 +41,7 @@ export function SecretaryClinicPage() {
   const [fee, setFee] = useState('15')
   const [staffRole, setStaffRole] = useState('doctor')
   const [staffActive, setStaffActive] = useState(true)
+  const [availableDays, setAvailableDays] = useState<string[]>([])
 
   const [benId, setBenId] = useState('')
   const [docId, setDocId] = useState('')
@@ -40,7 +52,17 @@ export function SecretaryClinicPage() {
   const [candidates, setCandidates] = useState<{ id: number; name: string; email: string; role: string }[]>([])
   const [showStaffDialog, setShowStaffDialog] = useState(false)
   const [showCreateApptDialog, setShowCreateApptDialog] = useState(false)
+  const [showApproveDialog, setShowApproveDialog] = useState(false)
+  const [approveTargetId, setApproveTargetId] = useState<number | null>(null)
+  const [approveDoctorId, setApproveDoctorId] = useState('')
+  const [approveWhen, setApproveWhen] = useState(() => new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16))
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null)
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false)
+  const [rescheduleTargetId, setRescheduleTargetId] = useState<number | null>(null)
+  const [rescheduleDoctorId, setRescheduleDoctorId] = useState('')
+  const [rescheduleWhen, setRescheduleWhen] = useState(() => new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 16))
+  const [rescheduleNote, setRescheduleNote] = useState('')
+  const [beneficiaries, setBeneficiaries] = useState<Record<string, unknown>[]>([])
 
   const doctors = useMemo(() => {
     return staff.filter((row) => {
@@ -76,6 +98,8 @@ export function SecretaryClinicPage() {
     try {
       await loadStaff()
       await loadAppts(apptPage)
+      const b = await api.fetchBeneficiaries({ page: 1 })
+      setBeneficiaries((b.data as Record<string, unknown>[]) ?? [])
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر التحميل'))
     }
@@ -112,6 +136,7 @@ export function SecretaryClinicPage() {
         consultation_fee: Number(fee),
         is_active: staffActive,
         role: staffRole,
+        available_days: availableDays,
       })
       setMsg('تم حفظ ملف العضو في الطاقم الطبي (رواتب وأجور ومتابعة التفعيل).')
       setShowStaffDialog(false)
@@ -154,6 +179,54 @@ export function SecretaryClinicPage() {
       await loadAppts(apptPage)
     } catch (ex) {
       setErr(extractErrorMessage(ex, 'فشل الإلغاء'))
+    }
+  }
+
+  async function onApproveTarget() {
+    if (!approveTargetId) {
+      return
+    }
+    setMsg(null)
+    setErr(null)
+    try {
+      await api.approveAppointment(approveTargetId, {
+        doctor_id: Number(approveDoctorId),
+        scheduled_at: new Date(approveWhen).toISOString(),
+      })
+      setMsg('تم اعتماد الطلب وجدولة الموعد بنجاح.')
+      setShowApproveDialog(false)
+      setApproveTargetId(null)
+      setApproveDoctorId('')
+      await loadAppts(apptPage)
+    } catch (ex) {
+      setErr(extractErrorMessage(ex, 'فشل اعتماد الموعد'))
+    }
+  }
+
+  async function onProposeReschedule() {
+    if (!rescheduleTargetId) {
+      return
+    }
+    if (!rescheduleDoctorId) {
+      setErr('اختر الطبيب أولاً قبل إرسال التعديل.')
+      return
+    }
+    setMsg(null)
+    setErr(null)
+    try {
+      await api.proposeAppointmentReschedule(rescheduleTargetId, {
+        doctor_id: Number(rescheduleDoctorId),
+        scheduled_at: new Date(rescheduleWhen).toISOString(),
+        proposal_note: rescheduleNote.trim() || null,
+      })
+      setMsg('تم إرسال اقتراح التعديل للمستفيد.')
+      setShowRescheduleDialog(false)
+      setRescheduleTargetId(null)
+      setRescheduleDoctorId('')
+      setRescheduleNote('')
+      await loadAppts(apptPage)
+    } catch (ex) {
+      setErr(extractErrorMessage(ex, 'فشل إرسال اقتراح التعديل'))
     }
   }
 
@@ -323,17 +396,46 @@ export function SecretaryClinicPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        {st === 'scheduled' ? (
-                          <button
-                            type="button"
-                            onClick={() => setCancelTargetId(Number(a.id))}
-                            className="rounded-md bg-rose-700/80 px-2 py-1 text-[11px] text-white hover:bg-rose-600"
-                          >
-                            إلغاء
-                          </button>
-                        ) : (
-                          <span className="text-white/38">—</span>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {st === 'pending' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApproveTargetId(Number(a.id))
+                                setApproveDoctorId('')
+                                setShowApproveDialog(true)
+                              }}
+                              className="rounded-md bg-emerald-700/80 px-2 py-1 text-[11px] text-white hover:bg-emerald-600"
+                            >
+                              اعتماد
+                            </button>
+                          ) : null}
+                          {st === 'scheduled' ? (
+                            <button
+                              type="button"
+                              onClick={() => setCancelTargetId(Number(a.id))}
+                              className="rounded-md bg-rose-700/80 px-2 py-1 text-[11px] text-white hover:bg-rose-600"
+                            >
+                              إلغاء
+                            </button>
+                          ) : null}
+                          {(st === 'pending' || st === 'scheduled') ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRescheduleTargetId(Number(a.id))
+                                setRescheduleDoctorId(String((a.doctor as { id?: number } | undefined)?.id ?? ''))
+                                setShowRescheduleDialog(true)
+                              }}
+                              className="rounded-md bg-amber-700/80 px-2 py-1 text-[11px] text-white hover:bg-amber-600"
+                            >
+                              تعديل الموعد
+                            </button>
+                          ) : null}
+                          {st !== 'pending' && st !== 'scheduled' ? (
+                            <span className="text-white/38">—</span>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -410,6 +512,28 @@ export function SecretaryClinicPage() {
                 value={fee}
                 onChange={(e) => setFee(e.target.value)}
               />
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span className="text-[11px] text-white/52">أيام الدوام المتاحة</span>
+                <div className="flex flex-wrap gap-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2">
+                  {WEEKDAY_OPTIONS.map((day) => (
+                    <label key={day} className="flex items-center gap-1 text-[11px] text-white/85">
+                      <input
+                        type="checkbox"
+                        checked={availableDays.includes(day)}
+                        onChange={(e) => {
+                          setAvailableDays((current) => {
+                            if (e.target.checked) {
+                              return [...current, day]
+                            }
+                            return current.filter((item) => item !== day)
+                          })
+                        }}
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+              </label>
               <button type="submit" className="rounded-lg bg-violet-600 py-2.5 font-medium text-white sm:col-span-2">
                 حفظ أو تحديث الملف
               </button>
@@ -428,12 +552,19 @@ export function SecretaryClinicPage() {
               </button>
             </div>
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={onCreateAppt}>
-              <input
+              <select
+                required
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="معرّف المستفيد"
                 value={benId}
                 onChange={(e) => setBenId(e.target.value)}
-              />
+              >
+                <option value="">— اختر المستفيد —</option>
+                {beneficiaries.map((beneficiary) => (
+                  <option key={String(beneficiary.id)} value={String(beneficiary.id)}>
+                    {String(beneficiary.name ?? 'مستفيد')} (#{String(beneficiary.id)})
+                  </option>
+                ))}
+              </select>
               <select
                 required
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
@@ -488,6 +619,98 @@ export function SecretaryClinicPage() {
               />
               <button type="button" onClick={() => void onCancelTarget()} className="w-full rounded-lg bg-rose-700 px-4 py-2 text-white">
                 تأكيد الإلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showApproveDialog && approveTargetId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-emerald-300/25 bg-slate-950 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-white">اعتماد طلب الموعد #{approveTargetId}</h4>
+              <button type="button" onClick={() => setShowApproveDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs">
+                إغلاق
+              </button>
+            </div>
+            <div className="space-y-3">
+              <select
+                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={approveDoctorId}
+                onChange={(e) => setApproveDoctorId(e.target.value)}
+              >
+                <option value="">— اختر الطبيب —</option>
+                {doctors.map((d) => {
+                  const u = d.user as { id?: number; name?: string }
+                  return (
+                    <option key={String(u?.id)} value={String(u?.id)}>
+                      {String(u?.name ?? 'طبيب')} (#{String(u?.id ?? '')})
+                    </option>
+                  )
+                })}
+              </select>
+              <input
+                type="datetime-local"
+                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={approveWhen}
+                onChange={(e) => setApproveWhen(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void onApproveTarget()}
+                className="w-full rounded-lg bg-emerald-700 px-4 py-2 text-white"
+              >
+                تأكيد الاعتماد والجدولة
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showRescheduleDialog && rescheduleTargetId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-300/25 bg-slate-950 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-white">اقتراح تعديل موعد #{rescheduleTargetId}</h4>
+              <button type="button" onClick={() => setShowRescheduleDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs">
+                إغلاق
+              </button>
+            </div>
+            <div className="space-y-3">
+              <select
+                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={rescheduleDoctorId}
+                onChange={(e) => setRescheduleDoctorId(e.target.value)}
+              >
+                <option value="">— اختر الطبيب —</option>
+                {doctors.map((d) => {
+                  const u = d.user as { id?: number; name?: string }
+                  return (
+                    <option key={String(u?.id)} value={String(u?.id)}>
+                      {String(u?.name ?? 'طبيب')} (#{String(u?.id ?? '')})
+                    </option>
+                  )
+                })}
+              </select>
+              <input
+                type="datetime-local"
+                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={rescheduleWhen}
+                onChange={(e) => setRescheduleWhen(e.target.value)}
+              />
+              <input
+                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                placeholder="ملاحظة للمستفيد (اختياري)"
+                value={rescheduleNote}
+                onChange={(e) => setRescheduleNote(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void onProposeReschedule()}
+                className="w-full rounded-lg bg-amber-700 px-4 py-2 text-white"
+              >
+                إرسال اقتراح التعديل
               </button>
             </div>
           </div>

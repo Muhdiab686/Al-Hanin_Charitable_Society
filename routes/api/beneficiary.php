@@ -13,17 +13,13 @@ Route::prefix('v1/beneficiary')->middleware(['auth:sanctum', 'role:beneficiary']
     Route::get('/profile-status', [BeneficiaryOnboardingController::class, 'profileStatus']);
     Route::post('/profile/complete', [BeneficiaryOnboardingController::class, 'completeProfile']);
 
-    Route::get('/aid-requests', [AidRequestController::class, 'index'])
-        ->middleware('permission:aid.request.create');
-    Route::post('/aid-requests', [AidRequestController::class, 'store'])
-        ->middleware('permission:aid.request.create');
+    Route::get('/aid-requests', [AidRequestController::class, 'index']);
+    Route::post('/aid-requests', [AidRequestController::class, 'store']);
+    Route::post('/aid-deliveries/confirm-by-qr', [AidRequestController::class, 'confirmBeneficiaryDeliveryByQr']);
 
-    Route::get('/appointments', [AppointmentController::class, 'index'])
-        ->middleware('permission:appointments.view');
-    Route::post('/appointments/request', [AppointmentController::class, 'requestAppointment'])
-        ->middleware('permission:appointments.view');
+    Route::get('/appointments', [AppointmentController::class, 'index']);
+    Route::post('/appointments/request', [AppointmentController::class, 'requestAppointment']);
 
-    Route::get('/medical-records', [MedicalRecordController::class, 'index'])
-        ->middleware('permission:medical.records.view');
+    Route::get('/medical-records', [MedicalRecordController::class, 'index']);
     Route::get('/medical-wallet', [BeneficiaryMedicalWalletController::class, 'showSelf']);
 });

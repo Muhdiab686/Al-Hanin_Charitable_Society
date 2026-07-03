@@ -60,11 +60,19 @@ class MedicalRecordController extends Controller
                 'tests_result' => $validated['tests_result'] ?? null,
                 'prescription' => $validated['prescription'] ?? null,
                 'prescription_cost' => $validated['prescription_cost'] ?? null,
+                'prescription_workflow_status' => isset($validated['prescription']) && isset($validated['prescription_cost'])
+                    && (float) $validated['prescription_cost'] > 0
+                    ? 'pending_secretary_review'
+                    : null,
                 'notes' => $validated['notes'] ?? null,
                 'recorded_at' => now(),
             ]);
 
-            $appointment->forceFill(['status' => 'completed'])->save();
+            $appointment->forceFill([
+                'status' => 'completed',
+                'payout_status' => 'completed',
+                'doctor_payout_request_id' => null,
+            ])->save();
 
             return $record;
         });

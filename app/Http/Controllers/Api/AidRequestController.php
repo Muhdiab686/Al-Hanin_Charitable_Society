@@ -6,6 +6,7 @@ use App\Enums\InventoryItemStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AidRequestReviewRequest;
 use App\Http\Requests\ConfirmAidDeliveryRequest;
+use App\Http\Requests\ConfirmBeneficiaryAidDeliveryByQrRequest;
 use App\Http\Requests\PublishAidRequestForDonorsRequest;
 use App\Http\Requests\StoreAidInventoryDistributionRequest;
 use App\Http\Requests\StoreAidRequestRequest;
@@ -13,7 +14,10 @@ use App\Models\AidInventoryAllocation;
 use App\Models\AidRequest;
 use App\Models\AidRequestAttachment;
 use App\Models\ApprovalRequest;
+use App\Models\Beneficiary;
+use App\Models\Family;
 use App\Models\InventoryItem;
+use App\Services\AppNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -77,8 +81,11 @@ class AidRequestController extends Controller
         ], 201);
     }
 
-    public function review(AidRequestReviewRequest $request, AidRequest $aidRequest): JsonResponse
-    {
+    public function review(
+        AidRequestReviewRequest $request,
+        AidRequest $aidRequest,
+        AppNotificationService $notifier
+    ): JsonResponse {
         if ($aidRequest->status !== 'pending') {
             throw ValidationException::withMessages([
                 'aid_request' => [__('Only pending aid requests can be reviewed.')],
@@ -106,6 +113,14 @@ class AidRequestController extends Controller
             $aidRequest->forceFill(['status' => $validated['decision']])->save();
         });
 
+        $notifier->notifyUser(
+            $aidRequest->beneficiary?->user,
+            'تحديث طلب المساعدة',
+            'تمت مراجعة طلب المساعدة الخاص بك وحالته الآن: '.$aidRequest->status,
+            '/app/beneficiary/aid',
+            ['aid_request_id' => $aidRequest->id, 'status' => $aidRequest->status]
+        );
+
         return response()->json([
             'message' => 'Aid request reviewed successfully.',
             'aid_request' => $aidRequest->fresh()->load(['beneficiary.family', 'approvals.reviewer', 'attachments']),
@@ -114,7 +129,8 @@ class AidRequestController extends Controller
 
     public function publishForDonors(
         PublishAidRequestForDonorsRequest $request,
-        AidRequest $aidRequest
+        AidRequest $aidRequest,
+        AppNotificationService $notifier
     ): JsonResponse {
         if ($aidRequest->status !== 'approved') {
             throw ValidationException::withMessages([
@@ -130,6 +146,14 @@ class AidRequestController extends Controller
             'published_for_donors_at' => now(),
             'published_by' => $request->user()->id,
         ])->save();
+
+        $notifier->notifyRoles(
+            ['donor'],
+            'حالة طارئة جديدة',
+            'تم نشر حالة مساعدة طارئة جديدة للمتبرعين.',
+            '/app/donor/urgent-aid',
+            ['aid_request_id' => $aidRequest->id]
+        );
 
         return response()->json([
             'message' => __('Aid request published for donors successfully.'),
@@ -195,8 +219,11 @@ class AidRequestController extends Controller
         ], 201);
     }
 
-    public function confirmDelivery(ConfirmAidDeliveryRequest $request, AidRequest $aidRequest): JsonResponse
-    {
+    public function confirmDelivery(
+        ConfirmAidDeliveryRequest $request,
+        AidRequest $aidRequest,
+        AppNotificationService $notifier
+    ): JsonResponse {
         $validated = $request->validated();
 
         $result = DB::transaction(function () use ($request, $aidRequest, $validated): array {
@@ -241,6 +268,16 @@ class AidRequestController extends Controller
                 ->all();
         });
 
+        if ($aidRequest->fresh()->status === 'fulfilled') {
+            $notifier->notifyUser(
+                $aidRequest->beneficiary?->user,
+                'تم تسليم المساعدة',
+                'تم تأكيد تسليم المساعدة الخاصة بطلبك.',
+                '/app/beneficiary/aid',
+                ['aid_request_id' => $aidRequest->id]
+            );
+        }
+
         return response()->json([
             'message' => __('Aid delivery confirmed successfully.'),
             'deliveries' => $result,
@@ -250,6 +287,94 @@ class AidRequestController extends Controller
                 'inventoryAllocations.distributor:id,name,email',
                 'inventoryAllocations.deliveryOfficer:id,name,email',
             ]),
+        ]);
+    }
+
+    public function confirmBeneficiaryDeliveryByQr(
+        ConfirmBeneficiaryAidDeliveryByQrRequest $request,
+        AppNotificationService $notifier
+    ): JsonResponse {
+        $beneficiary = Beneficiary::query()
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $payload = $request->validated('payload');
+        $token = substr($payload, strlen('hanin:'));
+
+        $family = Family::query()
+            ->whereKey($beneficiary->family_id)
+            ->where('qr_token', $token)
+            ->where('enrollment_status', 'approved')
+            ->first();
+
+        if ($family === null) {
+            throw ValidationException::withMessages([
+                'payload' => [__('QR code does not match your approved family profile.')],
+            ]);
+        }
+
+        $validated = $request->validated();
+
+        $deliveries = DB::transaction(function () use ($beneficiary, $validated, $request): array {
+            $query = AidInventoryAllocation::query()
+                ->whereNull('delivered_at')
+                ->whereHas('aidRequest', function ($aidRequestQuery) use ($beneficiary): void {
+                    $aidRequestQuery
+                        ->where('beneficiary_id', $beneficiary->id)
+                        ->whereIn('status', ['approved', 'fulfilled']);
+                });
+
+            if (! empty($validated['aid_request_id'])) {
+                $query->where('aid_request_id', (int) $validated['aid_request_id']);
+            }
+
+            $pendingAllocations = $query->lockForUpdate()->get();
+
+            if ($pendingAllocations->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'aid_request_id' => [__('No pending delivered baskets found for confirmation.')],
+                ]);
+            }
+
+            $deliveryNote = $validated['delivery_note'] ?? 'Beneficiary confirmed receipt via family QR.';
+            foreach ($pendingAllocations as $allocation) {
+                $allocation->forceFill([
+                    'delivered_by' => $request->user()->id,
+                    'delivered_at' => now(),
+                    'delivery_note' => $deliveryNote,
+                ])->save();
+            }
+
+            $aidRequestIds = $pendingAllocations->pluck('aid_request_id')->unique()->values();
+            foreach ($aidRequestIds as $aidRequestId) {
+                $hasPending = AidInventoryAllocation::query()
+                    ->where('aid_request_id', $aidRequestId)
+                    ->whereNull('delivered_at')
+                    ->exists();
+                if (! $hasPending) {
+                    AidRequest::query()
+                        ->whereKey($aidRequestId)
+                        ->update(['status' => 'fulfilled']);
+                }
+            }
+
+            return $pendingAllocations
+                ->load(['aidRequest', 'inventoryItem', 'deliveryOfficer:id,name,email'])
+                ->values()
+                ->all();
+        });
+
+        $notifier->notifyRoles(
+            ['storekeeper', 'volunteer', 'recording_secretary', 'secretary'],
+            'تأكيد استلام مساعدة عبر التطبيق',
+            'قام المستفيد بتأكيد استلام المساعدة عبر QR من التطبيق.',
+            '/app/storekeeper/aid',
+            ['beneficiary_id' => $beneficiary->id]
+        );
+
+        return response()->json([
+            'message' => __('Aid receipt confirmed successfully.'),
+            'deliveries' => $deliveries,
         ]);
     }
 }

@@ -21,11 +21,17 @@ class ClinicAppointment extends Model
         'doctor_id',
         'created_by',
         'approved_by',
+        'proposed_by',
         'scheduled_at',
+        'proposed_scheduled_at',
         'approved_at',
+        'proposal_responded_at',
         'status',
+        'payout_status',
+        'doctor_payout_request_id',
         'workflow_status',
         'reason',
+        'proposal_note',
         'requested_specialty',
         'cancelled_at',
         'cancellation_reason',
@@ -38,7 +44,9 @@ class ClinicAppointment extends Model
     {
         return [
             'scheduled_at' => 'datetime',
+            'proposed_scheduled_at' => 'datetime',
             'approved_at' => 'datetime',
+            'proposal_responded_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -63,8 +71,18 @@ class ClinicAppointment extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function proposer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'proposed_by');
+    }
+
     public function medicalRecord(): HasOne
     {
         return $this->hasOne(MedicalRecord::class);
+    }
+
+    public function doctorPayoutRequest(): BelongsTo
+    {
+        return $this->belongsTo(DoctorPayoutRequest::class, 'doctor_payout_request_id');
     }
 }

@@ -20,7 +20,9 @@ use App\Http\Controllers\Api\DonorChatController;
 use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\InventoryController;
+use App\Http\Controllers\Api\MedicalPrescriptionWorkflowController;
 use App\Http\Controllers\Api\MedicalRecordController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublishedAidRequestController;
 use App\Http\Controllers\Api\QrVerificationController;
 use App\Http\Controllers\Api\RoleOverviewController;
@@ -51,13 +53,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     });
 
     Route::get('/beneficiaries', [BeneficiaryController::class, 'index'])
-        ->middleware('permission:beneficiaries.view');
+        ->middleware('role_or_permission:secretary|beneficiaries.view');
     Route::post('/beneficiaries', [BeneficiaryController::class, 'store'])
         ->middleware('permission:beneficiaries.manage');
     Route::post('/beneficiaries/onboard', [BeneficiaryOnboardingController::class, 'onboard'])
         ->middleware('permission:beneficiaries.manage');
     Route::get('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'show'])
-        ->middleware('permission:beneficiaries.view');
+        ->middleware('role_or_permission:secretary|beneficiaries.view');
     Route::patch('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
         ->middleware('permission:beneficiaries.manage');
     Route::post('/beneficiaries/{beneficiary}/recalculate-category', [BeneficiaryController::class, 'recalculateCategory'])
@@ -67,9 +69,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/beneficiaries/{beneficiary}/medical-wallet/credits', [BeneficiaryMedicalWalletController::class, 'credit'])
         ->middleware('permission:medical.records.manage');
     Route::get('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'index'])
-        ->middleware('permission:beneficiaries.view|beneficiaries.manage');
+        ->middleware('role_or_permission:secretary|beneficiaries.view|beneficiaries.manage');
     Route::post('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'store'])
-        ->middleware('permission:beneficiaries.manage');
+        ->middleware('role_or_permission:secretary|beneficiaries.manage');
 
     Route::get('/beneficiary/dashboard', [BeneficiaryDashboardController::class, 'show'])
         ->middleware('role:beneficiary');
@@ -88,6 +90,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.manage');
     Route::get('/families/{family}/members', [FamilyController::class, 'members'])
         ->middleware('permission:beneficiaries.view|beneficiaries.manage');
+    Route::get('/families/{family}/history', [FamilyController::class, 'history'])
+        ->middleware('permission:beneficiaries.view|beneficiaries.manage');
     Route::post('/families/{family}/members', [FamilyController::class, 'storeMember'])
         ->middleware('permission:beneficiaries.manage');
     Route::get('/families/{family}/qr-code', [FamilyController::class, 'qrCode']);
@@ -96,9 +100,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.view|beneficiaries.manage|aid.distribute');
 
     Route::get('/aid-requests', [AidRequestController::class, 'index'])
-        ->middleware('permission:aid.request.create|aid.request.review|aid.distribute');
+        ->middleware('role_or_permission:beneficiary|aid.request.create|aid.request.review|aid.distribute');
     Route::post('/aid-requests', [AidRequestController::class, 'store'])
-        ->middleware('permission:aid.request.create');
+        ->middleware('role_or_permission:beneficiary|aid.request.create');
     Route::patch('/aid-requests/{aidRequest}/review', [AidRequestController::class, 'review'])
         ->middleware('permission:aid.request.review');
     Route::patch('/aid-requests/{aidRequest}/publish-for-donors', [AidRequestController::class, 'publishForDonors'])
@@ -114,6 +118,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:aid.distribute|aid.request.review');
     Route::post('/aid-distribution-plans', [AidDistributionPlanController::class, 'store'])
         ->middleware('permission:aid.distribute|aid.request.review');
+    Route::patch('/aid-distribution-plans/{aidDistributionPlan}/complete-cycle', [AidDistributionPlanController::class, 'completeCycle'])
+        ->middleware('permission:aid.distribute|aid.request.review');
 
     Route::get('/categories/rules', [CategoryRuleController::class, 'index'])
         ->middleware('permission:beneficiaries.manage|aid.request.review');
@@ -121,9 +127,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.manage');
 
     Route::get('/campaigns', [CampaignController::class, 'index'])
-        ->middleware('permission:finance.reports.view|users.manage');
+        ->middleware('role_or_permission:recording_secretary|finance.reports.view|users.manage');
     Route::post('/campaigns', [CampaignController::class, 'store'])
-        ->middleware('permission:users.manage');
+        ->middleware('role_or_permission:recording_secretary|users.manage');
     Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
 
     Route::get('/donations', [DonationController::class, 'index'])
@@ -131,6 +137,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/donations', [DonationController::class, 'store'])
         ->middleware('permission:donations.create');
     Route::get('/donations/{donation}', [DonationController::class, 'show'])
+        ->middleware('permission:donations.view|inventory.view');
+    Route::get('/donations/{donation}/receipt-qr', [DonationController::class, 'receiptQr'])
         ->middleware('permission:donations.view|inventory.view');
     Route::post('/donations/stripe/checkout', [StripeDonationController::class, 'createCheckoutSession'])
         ->middleware('permission:donations.create');
@@ -143,27 +151,38 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:inventory.manage');
 
     Route::get('/clinic/staff', [ClinicStaffController::class, 'index'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
     Route::get('/clinic/staff/candidates', [ClinicStaffController::class, 'candidates'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
     Route::put('/clinic/staff', [ClinicStaffController::class, 'upsert'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
 
     Route::get('/appointments', [AppointmentController::class, 'index'])
-        ->middleware('permission:appointments.view|appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.view|appointments.manage');
     Route::post('/appointments', [AppointmentController::class, 'store'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
     Route::post('/appointments/request', [AppointmentController::class, 'requestAppointment'])
         ->middleware('role:beneficiary');
+    Route::get('/appointments/doctors', [AppointmentController::class, 'doctorsCatalog'])
+        ->middleware('role:beneficiary');
     Route::patch('/appointments/{appointment}/approve', [AppointmentController::class, 'approve'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
+    Route::patch('/appointments/{appointment}/propose-reschedule', [AppointmentController::class, 'proposeReschedule'])
+        ->middleware('role_or_permission:secretary|appointments.manage');
+    Route::patch('/appointments/{appointment}/respond-reschedule', [AppointmentController::class, 'respondReschedule'])
+        ->middleware('role:beneficiary');
     Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
-        ->middleware('permission:appointments.manage');
+        ->middleware('role_or_permission:secretary|appointments.manage');
 
     Route::get('/medical-records', [MedicalRecordController::class, 'index'])
-        ->middleware('permission:medical.records.view|medical.records.manage');
+        ->middleware('role_or_permission:secretary|medical.records.view|medical.records.manage');
     Route::post('/medical-records', [MedicalRecordController::class, 'store'])
         ->middleware('permission:medical.records.manage');
+    Route::get('/medical-prescriptions', [MedicalPrescriptionWorkflowController::class, 'index'])
+        ->middleware('role_or_permission:secretary|medical.records.view|appointments.manage|finance.expenses.manage');
+    Route::patch('/medical-prescriptions/{medicalRecord}/review', [MedicalPrescriptionWorkflowController::class, 'review'])
+        ->middleware('role_or_permission:secretary|medical.records.manage|appointments.manage|finance.expenses.manage');
+    Route::post('/medical-prescriptions/{medicalRecord}/disburse', [MedicalPrescriptionWorkflowController::class, 'disburse']);
 
     Route::get('/doctor-payout-requests', [DoctorPayoutController::class, 'index'])
         ->middleware('permission:finance.reports.view|finance.expenses.manage');
@@ -200,6 +219,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/donor-chat/messages', [DonorChatController::class, 'donorIndex']);
     Route::post('/donor-chat/messages', [DonorChatController::class, 'donorStore']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 });
 
 Route::get('/user', function (Request $request) {

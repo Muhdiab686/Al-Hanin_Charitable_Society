@@ -6,9 +6,12 @@ use App\Enums\DonationType;
 use App\Enums\InventoryItemStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDonationRequest;
+use App\Models\Campaign;
 use App\Models\Donation;
 use App\Models\FinancialTransaction;
 use App\Models\InventoryItem;
+use App\Services\AppNotificationService;
+use App\Services\DonationReceiptQrCodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +31,7 @@ class DonationController extends Controller
         return response()->json($query->paginate(15));
     }
 
-    public function store(StoreDonationRequest $request): JsonResponse
+    public function store(StoreDonationRequest $request, AppNotificationService $notifier): JsonResponse
     {
         $validated = $request->validated();
 
@@ -43,10 +46,12 @@ class DonationController extends Controller
                 'channel' => $validated['channel'] ?? 'manual',
                 'cash_amount' => $cashAmount,
                 'donor_name' => $validated['donor_name'] ?? null,
+                'show_donor_name' => $validated['show_donor_name'] ?? true,
                 'donor_phone' => $validated['donor_phone'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'purpose' => $validated['purpose'] ?? null,
                 'pledge_frequency' => $validated['pledge_frequency'] ?? null,
+                'campaign_id' => $validated['campaign_id'] ?? null,
                 'receipt_code' => $receiptCode,
                 'registered_by' => $request->user()->id,
             ]);
@@ -79,10 +84,31 @@ class DonationController extends Controller
                     'recorded_by' => $request->user()->id,
                     'recorded_at' => now(),
                 ]);
+
+                if (isset($validated['campaign_id'])) {
+                    $campaign = Campaign::query()->whereKey($validated['campaign_id'])->first();
+                    if ($campaign !== null) {
+                        $campaign->increment('raised_amount', (float) $validated['cash_amount']);
+                        $campaign->refresh();
+                        $campaign->autoCompleteIfEligible();
+                    }
+                }
             }
 
             return $donation;
         });
+
+        $notificationMessage = ($validated['type'] ?? null) === DonationType::Cash->value
+            ? 'تم تسجيل تبرع نقدي جديد بقيمة '.$donation->cash_amount
+            : 'تم تسجيل تبرع عيني جديد.';
+
+        $notifier->notifyRoles(
+            ['accountant', 'admin'],
+            'تبرع جديد',
+            $notificationMessage,
+            '/app/accountant/donations',
+            ['donation_id' => $donation->id, 'type' => (string) ($validated['type'] ?? '')]
+        );
 
         return response()->json([
             'message' => __('Donation recorded successfully.'),
@@ -95,6 +121,23 @@ class DonationController extends Controller
         $this->authorizeDonationView($request, $donation);
 
         return response()->json($donation->load(['inventoryItems', 'registrar:id,name,email']));
+    }
+
+    public function receiptQr(
+        Request $request,
+        Donation $donation,
+        DonationReceiptQrCodeGenerator $generator
+    ): JsonResponse {
+        $this->authorizeDonationView($request, $donation);
+
+        $payload = $generator->formatPayload($donation);
+        $qr = $generator->toBase64Image($payload);
+
+        return response()->json([
+            'payload' => $payload,
+            'png_base64' => $qr['base64'],
+            'mime_type' => $qr['mime_type'],
+        ]);
     }
 
     private function authorizeDonationView(Request $request, Donation $donation): void

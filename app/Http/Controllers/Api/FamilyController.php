@@ -9,8 +9,11 @@ use App\Http\Requests\StoreFamilyMemberRequest;
 use App\Http\Requests\UpdateFamilyAidEligibilityRequest;
 use App\Http\Requests\UpdateFamilyEnrollmentStatusRequest;
 use App\Http\Requests\UpdateFamilyProfileRequest;
+use App\Models\AidRequest;
 use App\Models\Beneficiary;
 use App\Models\Family;
+use App\Models\MedicalRecord;
+use App\Services\BeneficiaryAccountService;
 use App\Services\BeneficiaryCategoryAssigner;
 use App\Services\FamilyQrCodeGenerator;
 use Illuminate\Http\JsonResponse;
@@ -20,8 +23,11 @@ use Illuminate\Validation\ValidationException;
 
 class FamilyController extends Controller
 {
-    public function updateEnrollmentStatus(UpdateFamilyEnrollmentStatusRequest $request, Family $family): JsonResponse
-    {
+    public function updateEnrollmentStatus(
+        UpdateFamilyEnrollmentStatusRequest $request,
+        Family $family,
+        BeneficiaryAccountService $accountService
+    ): JsonResponse {
         $newStatus = FamilyEnrollmentStatus::from($request->validated('enrollment_status'));
 
         if ($newStatus === $family->enrollment_status) {
@@ -44,7 +50,10 @@ class FamilyController extends Controller
                 ]);
             }
         } else {
-            if (! $user?->hasPermissionTo('beneficiaries.manage')) {
+            if (
+                ! $user?->hasPermissionTo('beneficiaries.manage')
+                && ! $user?->hasPermissionTo('families.enrollment.review')
+            ) {
                 abort(403, 'You are not authorized to update enrollment workflow.');
             }
 
@@ -79,9 +88,15 @@ class FamilyController extends Controller
 
         $family->forceFill($attributes)->save();
 
+        $credentials = null;
+        if ($newStatus === FamilyEnrollmentStatus::Approved) {
+            $credentials = $accountService->createCredentialsForFamilyIfMissing($family);
+        }
+
         return response()->json([
             'message' => 'Enrollment status updated.',
             'family' => $family->fresh()->load('beneficiaries'),
+            'credentials' => $credentials,
         ]);
     }
 
@@ -104,17 +119,17 @@ class FamilyController extends Controller
         }
 
         if ($family->qr_token === null) {
-            throw ValidationException::withMessages([
-                'family' => [__('QR token is missing; approve enrollment again or contact support.')],
-            ]);
+            $family->forceFill(['qr_token' => (string) Str::uuid()])->save();
+            $family->refresh();
         }
 
         $payload = $generator->formatPayload($family->qr_token);
+        $qr = $generator->toBase64Image($payload);
 
         return response()->json([
             'payload' => $payload,
-            'png_base64' => $generator->toBase64Png($payload),
-            'mime_type' => 'image/png',
+            'png_base64' => $qr['base64'],
+            'mime_type' => $qr['mime_type'],
         ]);
     }
 
@@ -199,6 +214,55 @@ class FamilyController extends Controller
         return response()->json([
             'message' => __('Family profile updated successfully.'),
             'family' => $family->fresh()->load('beneficiaries.category'),
+        ]);
+    }
+
+    public function history(Family $family): JsonResponse
+    {
+        $family->load(['beneficiaries.category']);
+        $beneficiaryIds = $family->beneficiaries->pluck('id');
+
+        $aidRequests = AidRequest::query()
+            ->whereIn('beneficiary_id', $beneficiaryIds)
+            ->with([
+                'beneficiary:id,name,family_id',
+                'approvals.reviewer:id,name,email',
+                'inventoryAllocations.inventoryItem:id,item_name,item_code',
+                'inventoryAllocations.deliveryOfficer:id,name,email',
+            ])
+            ->latest('submitted_at')
+            ->get();
+
+        $medicalRecords = MedicalRecord::query()
+            ->whereIn('beneficiary_id', $beneficiaryIds)
+            ->with([
+                'beneficiary:id,name,family_id',
+                'doctor:id,name,email',
+                'appointment:id,scheduled_at',
+            ])
+            ->latest('recorded_at')
+            ->get();
+
+        $deliveredAllocationsCount = $aidRequests
+            ->flatMap(fn ($aidRequest) => $aidRequest->inventoryAllocations)
+            ->filter(fn ($allocation) => $allocation->delivered_at !== null)
+            ->count();
+
+        $disbursedPrescriptionCount = $medicalRecords
+            ->where('prescription_workflow_status', 'disbursed')
+            ->count();
+
+        return response()->json([
+            'family' => $family,
+            'aid_requests' => $aidRequests,
+            'medical_records' => $medicalRecords,
+            'summary' => [
+                'beneficiaries_count' => $family->beneficiaries->count(),
+                'aid_requests_count' => $aidRequests->count(),
+                'delivered_allocations_count' => $deliveredAllocationsCount,
+                'medical_records_count' => $medicalRecords->count(),
+                'disbursed_prescriptions_count' => $disbursedPrescriptionCount,
+            ],
         ]);
     }
 }

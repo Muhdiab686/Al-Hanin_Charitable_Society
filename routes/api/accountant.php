@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\DoctorPayoutController;
 use App\Http\Controllers\Api\DonorChatController;
 use App\Http\Controllers\Api\FinanceController;
+use App\Http\Controllers\Api\MedicalPrescriptionWorkflowController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/accountant')->middleware(['auth:sanctum', 'role:accountant'])->group(function () {
@@ -16,6 +17,11 @@ Route::prefix('v1/accountant')->middleware(['auth:sanctum', 'role:accountant'])-
     Route::get('/doctor-payout-requests', [DoctorPayoutController::class, 'index'])
         ->middleware('permission:finance.reports.view');
     Route::patch('/doctor-payout-requests/{doctorPayoutRequest}/review', [DoctorPayoutController::class, 'review'])
+        ->middleware('permission:finance.expenses.manage');
+
+    Route::get('/medical-prescriptions', [MedicalPrescriptionWorkflowController::class, 'index'])
+        ->middleware('permission:finance.expenses.manage');
+    Route::post('/medical-prescriptions/{medicalRecord}/disburse', [MedicalPrescriptionWorkflowController::class, 'disburse'])
         ->middleware('permission:finance.expenses.manage');
 
     Route::prefix('communications/donor-chat')->middleware('permission:communications.donor_chat')->group(function () {

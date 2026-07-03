@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Campaign;
 use App\Models\Donation;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -125,5 +126,54 @@ class FinanceApiTest extends TestCase
         ], [
             'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
         ])->assertForbidden();
+    }
+
+    public function test_cash_donation_for_campaign_updates_campaign_wallet_and_campaign_expense_reduces_balance(): void
+    {
+        $accountant = User::factory()->create(['role' => UserRole::Accountant->value]);
+        $accountant->syncRoles([UserRole::Accountant->value]);
+        $token = $accountant->createToken('a3')->plainTextToken;
+
+        $campaign = Campaign::query()->create([
+            'title' => 'دفء الشتاء',
+            'goal_amount' => 1000,
+            'raised_amount' => 0,
+            'spent_amount' => 0,
+            'status' => 'active',
+            'created_by' => $accountant->id,
+        ]);
+
+        $this->postJson('/api/v1/donations', [
+            'type' => 'cash',
+            'channel' => 'web',
+            'cash_amount' => 200,
+            'donor_name' => 'Campaign Donor',
+            'campaign_id' => $campaign->id,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('campaigns', [
+            'id' => $campaign->id,
+            'raised_amount' => 200,
+        ]);
+
+        $this->postJson('/api/v1/finance/expenses', [
+            'amount' => 50,
+            'description' => 'شراء مواد حملة',
+            'campaign_id' => $campaign->id,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('financial_transactions', [
+            'source' => 'campaign_invoice',
+            'amount' => 50,
+        ]);
+        $this->assertDatabaseHas('campaigns', [
+            'id' => $campaign->id,
+            'raised_amount' => 200,
+            'spent_amount' => 50,
+        ]);
     }
 }

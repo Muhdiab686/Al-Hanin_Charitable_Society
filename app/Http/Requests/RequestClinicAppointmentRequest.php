@@ -17,6 +17,7 @@ class RequestClinicAppointmentRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'doctor_id' => ['required', 'exists:users,id'],
             'requested_specialty' => ['required', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'preferred_date' => ['nullable', 'date', 'after_or_equal:today'],

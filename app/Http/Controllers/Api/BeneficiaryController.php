@@ -9,11 +9,13 @@ use App\Http\Requests\StoreBeneficiaryRequest;
 use App\Http\Requests\UpdateBeneficiaryProfileRequest;
 use App\Models\Beneficiary;
 use App\Models\Family;
+use App\Services\BeneficiaryAccountService;
 use App\Services\BeneficiaryCategoryAssigner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class BeneficiaryController extends Controller
 {
@@ -55,11 +57,14 @@ class BeneficiaryController extends Controller
         ]);
     }
 
-    public function store(StoreBeneficiaryRequest $request, BeneficiaryCategoryAssigner $assigner): JsonResponse
-    {
+    public function store(
+        StoreBeneficiaryRequest $request,
+        BeneficiaryCategoryAssigner $assigner,
+        BeneficiaryAccountService $accountService
+    ): JsonResponse {
         $validated = $request->validated();
 
-        $beneficiary = DB::transaction(function () use ($validated, $assigner): Beneficiary {
+        $result = DB::transaction(function () use ($validated, $assigner, $accountService): array {
             $enrollmentStatus = isset($validated['family']['enrollment_status'])
                 ? FamilyEnrollmentStatus::from($validated['family']['enrollment_status'])
                 : FamilyEnrollmentStatus::PendingBoard;
@@ -96,12 +101,43 @@ class BeneficiaryController extends Controller
                 $assigner->assign($beneficiary);
             }
 
-            return $beneficiary;
+            foreach (($validated['members'] ?? []) as $memberData) {
+                $memberRelationship = FamilyRelationship::from($memberData['family_relationship']);
+                $member = Beneficiary::query()->create([
+                    'family_id' => $family->id,
+                    'category_id' => $memberData['category_id'] ?? null,
+                    'national_id' => $memberData['national_id'] ?? ('MEM-'.Str::upper(Str::random(8))),
+                    'name' => $memberData['name'],
+                    'date_of_birth' => $memberData['date_of_birth'] ?? null,
+                    'phone' => $memberData['phone'] ?? null,
+                    'gender' => $memberData['gender'] ?? null,
+                    'notes' => $memberData['notes'] ?? null,
+                    'is_head_of_family' => $memberRelationship === FamilyRelationship::Head,
+                    'family_relationship' => $memberRelationship->value,
+                ]);
+
+                if (! isset($memberData['category_id'])) {
+                    $assigner->assign($member);
+                }
+            }
+
+            $actualCount = max(1, Beneficiary::query()->where('family_id', $family->id)->count());
+            if ($actualCount !== (int) $family->members_count) {
+                $family->forceFill(['members_count' => $actualCount])->save();
+            }
+
+            $credentials = $accountService->createCredentialsForFamilyIfMissing($family, false);
+
+            return [
+                'beneficiary' => $beneficiary,
+                'credentials' => $credentials,
+            ];
         });
 
         return response()->json([
             'message' => 'Beneficiary created successfully.',
-            'beneficiary' => $beneficiary->load(['family', 'category']),
+            'beneficiary' => $result['beneficiary']->load(['family', 'category']),
+            'credentials' => $result['credentials'],
         ], 201);
     }
 

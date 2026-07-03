@@ -9,6 +9,8 @@ export function DonorUrgentAidPage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [donateId, setDonateId] = useState<number | null>(null)
   const [amount, setAmount] = useState('50')
+  const [showDonorName, setShowDonorName] = useState(true)
+  const [donorName, setDonorName] = useState('')
 
   async function load() {
     setErr(null)
@@ -30,18 +32,15 @@ export function DonorUrgentAidPage() {
     setErr(null)
     const id = Number(row.id)
     try {
-      await api.createDonation({
-        type: 'cash',
-        channel: 'donor_portal',
-        cash_amount: Number(amount),
-        purpose: `طوارئ-مساعدة:#${id}`,
-        donor_name: 'متبرع بالمنصّة',
-        notes: `تبرع لحالة طارئة منشورة: ${String(row.public_title ?? '')}`,
+      const checkout = await api.createStripeCheckout({
+        amount: Number(amount),
+        purpose: `حالة طارئة: ${String(row.public_title ?? '')} (#${id})`,
+        show_donor_name: showDonorName,
+        donor_name: showDonorName ? donorName.trim() || undefined : undefined,
       })
-      setMsg('شكراً — تم تسجيل تبرعك لهذه الحالة الطارئة.')
-      setDonateId(null)
+      window.location.href = checkout.checkout_url
     } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل تسجيل التبرع'))
+      setErr(extractErrorMessage(ex, 'فشل التحويل إلى الدفع الإلكتروني'))
     }
   }
 
@@ -84,8 +83,26 @@ export function DonorUrgentAidPage() {
                         onChange={(e) => setAmount(e.target.value)}
                       />
                     </label>
+                    <label className="flex items-center gap-2 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-[11px] text-white/80">
+                      <input
+                        type="checkbox"
+                        checked={showDonorName}
+                        onChange={(e) => setShowDonorName(e.target.checked)}
+                      />
+                      إظهار اسم المتبرع
+                    </label>
+                    {showDonorName ? (
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] text-white/55">اسم المتبرع</span>
+                        <input
+                          className="w-48 rounded-lg border border-white/15 bg-slate-950/50 px-2 py-2 text-white"
+                          value={donorName}
+                          onChange={(e) => setDonorName(e.target.value)}
+                        />
+                      </label>
+                    ) : null}
                     <button type="submit" className="rounded-lg bg-rose-600 px-4 py-2 text-white">
-                      تأكيد التبرع
+                      الدفع الإلكتروني
                     </button>
                     <button
                       type="button"

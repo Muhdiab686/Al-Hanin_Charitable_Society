@@ -2,6 +2,7 @@ import { RoleOverviewPanel } from '../../components/dashboard/RoleOverviewPanel'
 import { ShortcutGrid } from '../../components/dashboard/ShortcutGrid'
 
 const cards = [
+  { to: '/app/doctor/profile', title: 'الملف المهني', desc: 'تحديث الاختصاص والسيرة الذاتية وأيام الدوام وأجرة المعاينة.' },
   { to: '/app/doctor/appointments', title: 'الفحص والمواعيد', desc: 'إجراء الفحص، تسجيل التشخيص، إصدار وصفة، وطلب تحليل عبر نوافذ Dialog.' },
   { to: '/app/doctor/medical', title: 'السجل الطبي الكامل', desc: 'عرض السجل الطبي الكامل للمريض واستعراض نتائج المختبر المرتبطة به.' },
 ]

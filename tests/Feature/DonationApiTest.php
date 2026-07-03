@@ -157,4 +157,36 @@ class DonationApiTest extends TestCase
             'Authorization' => 'Bearer '.$donorA->createToken('t')->plainTextToken,
         ])->assertForbidden();
     }
+
+    public function test_donor_can_fetch_receipt_qr_for_own_donation(): void
+    {
+        $donor = User::factory()->create(['role' => UserRole::Donor->value]);
+        $donor->syncRoles([UserRole::Donor->value]);
+
+        $donation = Donation::factory()->create([
+            'registered_by' => $donor->id,
+            'receipt_code' => 'DON-QR-TEST-1',
+        ]);
+
+        $this->getJson('/api/v1/donations/'.$donation->id.'/receipt-qr', [
+            'Authorization' => 'Bearer '.$donor->createToken('t')->plainTextToken,
+        ])
+            ->assertOk()
+            ->assertJsonPath('mime_type', fn ($mime): bool => in_array($mime, ['image/png', 'image/svg+xml'], true))
+            ->assertJsonPath('payload', 'hanin-donation|id='.$donation->id.'|receipt=DON-QR-TEST-1|amount='.$donation->cash_amount.'|campaign=');
+    }
+
+    public function test_donor_cannot_fetch_receipt_qr_for_foreign_donation(): void
+    {
+        $donorA = User::factory()->create(['role' => UserRole::Donor->value]);
+        $donorA->syncRoles([UserRole::Donor->value]);
+        $donorB = User::factory()->create(['role' => UserRole::Donor->value]);
+        $donorB->syncRoles([UserRole::Donor->value]);
+
+        $foreign = Donation::factory()->create(['registered_by' => $donorB->id]);
+
+        $this->getJson('/api/v1/donations/'.$foreign->id.'/receipt-qr', [
+            'Authorization' => 'Bearer '.$donorA->createToken('t')->plainTextToken,
+        ])->assertForbidden();
+    }
 }

@@ -24,6 +24,8 @@ class UpsertClinicStaffProfileRequest extends FormRequest
             'consultation_fee' => ['required', 'numeric', 'min:0'],
             'specialty' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:2000'],
+            'available_days' => ['nullable', 'array', 'min:1'],
+            'available_days.*' => ['required', 'string', 'max:20'],
             'is_active' => ['required', 'boolean'],
             'role' => ['required', Rule::in(['doctor', 'secretary'])],
         ];

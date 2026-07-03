@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import type { Paginated } from '../../types/models'
@@ -23,35 +23,37 @@ function rowsForBeneficiary<T extends Record<string, unknown>>(rows: T[], benefi
 
 export function SecretaryMedicalPage() {
   const [beneficiaryIdInput, setBeneficiaryIdInput] = useState('')
+  const [beneficiaryOptions, setBeneficiaryOptions] = useState<Record<string, unknown>[]>([])
   const [activeBenId, setActiveBenId] = useState<number | null>(null)
   const [activeBeneficiary, setActiveBeneficiary] = useState<Record<string, unknown> | null>(null)
 
   const [records, setRecords] = useState<Record<string, unknown>[]>([])
   const [labs, setLabs] = useState<Record<string, unknown>[]>([])
-  const [scheduledAppts, setScheduledAppts] = useState<Record<string, unknown>[]>([])
+  const [prescriptionRows, setPrescriptionRows] = useState<Record<string, unknown>[]>([])
+  const [prescriptionReviewId, setPrescriptionReviewId] = useState('')
+  const [prescriptionDecision, setPrescriptionDecision] = useState<'approved' | 'rejected'>('approved')
+  const [prescriptionReviewNote, setPrescriptionReviewNote] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   const [showPicker, setShowPicker] = useState(false)
-  const [showRecordDialog, setShowRecordDialog] = useState(false)
   const [showLabDialog, setShowLabDialog] = useState(false)
   const [pickerRows, setPickerRows] = useState<Record<string, unknown>[]>([])
   const [pickerPage, setPickerPage] = useState(1)
   const [pickerLast, setPickerLast] = useState(1)
   const [pickerLoading, setPickerLoading] = useState(false)
 
-  const [apptForRecord, setApptForRecord] = useState('')
-  const [diagnosis, setDiagnosis] = useState('')
-  const [testsResult, setTestsResult] = useState('')
-  const [prescription, setPrescription] = useState('')
-  const [prescriptionCost, setPrescriptionCost] = useState('')
-  const [notes, setNotes] = useState('')
-
   const [labTitle, setLabTitle] = useState('')
   const [labFindings, setLabFindings] = useState('')
   const [labFile, setLabFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    void loadPickerPage(1)
+    void loadPrescriptionRequests()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function loadPickerPage(page: number) {
     setPickerLoading(true)
@@ -59,6 +61,9 @@ export function SecretaryMedicalPage() {
     try {
       const res = (await api.fetchBeneficiaries({ page })) as Paginated<Record<string, unknown>>
       setPickerRows((res.data as Record<string, unknown>[]) ?? [])
+      if (page === 1) {
+        setBeneficiaryOptions((res.data as Record<string, unknown>[]) ?? [])
+      }
       setPickerLast(Math.max(1, res.last_page))
       setPickerPage(res.current_page ?? page)
     } catch (e) {
@@ -68,27 +73,35 @@ export function SecretaryMedicalPage() {
     }
   }
 
+  async function loadPrescriptionRequests() {
+    setErr(null)
+    try {
+      const res = await api.fetchMedicalPrescriptionRequests({
+        page: 1,
+        workflow_status: 'pending_secretary_review',
+      })
+      setPrescriptionRows((res.data as Record<string, unknown>[]) ?? [])
+    } catch (e) {
+      setErr(extractErrorMessage(e, 'تعذّر تحميل طلبات صرف الوصفات'))
+    }
+  }
+
   async function loadForBeneficiary(id: number): Promise<boolean> {
     setLoading(true)
     setErr(null)
-    setApptForRecord('')
     try {
       const { beneficiary: ben } = await api.fetchBeneficiary(id)
 
-      const [recPage, labPage, apptPage] = await Promise.all([
+      const [recPage, labPage] = await Promise.all([
         api.fetchMedicalRecords({ beneficiary_id: id, page: 1 }),
         api.fetchBeneficiaryLabReports(id, { page: 1 }),
-        api.fetchAppointments({ beneficiary_id: id, status: 'scheduled', page: 1 }),
       ])
 
       const rawRecords =
         ((recPage as Paginated<Record<string, unknown>>).data as Record<string, unknown>[]) ?? []
-      const rawAppts =
-        ((apptPage as Paginated<Record<string, unknown>>).data as Record<string, unknown>[]) ?? []
 
       setRecords(rowsForBeneficiary(rawRecords, id))
       setLabs(((labPage as Paginated<Record<string, unknown>>).data as Record<string, unknown>[]) ?? [])
-      setScheduledAppts(rowsForBeneficiary(rawAppts, id))
       setActiveBenId(id)
       setActiveBeneficiary(ben ?? null)
 
@@ -99,7 +112,6 @@ export function SecretaryMedicalPage() {
       setActiveBeneficiary(null)
       setRecords([])
       setLabs([])
-      setScheduledAppts([])
 
       return false
     } finally {
@@ -114,7 +126,7 @@ export function SecretaryMedicalPage() {
     const id = Number.parseInt(beneficiaryIdInput.trim(), 10)
 
     if (!Number.isFinite(id) || id < 1) {
-      setErr('أدخل معرّف مستفيد رقماً صالحاً.')
+      setErr('اختر مستفيداً صالحاً من القائمة.')
 
       return
     }
@@ -122,36 +134,6 @@ export function SecretaryMedicalPage() {
     const ok = await loadForBeneficiary(id)
     if (ok) {
       setMsg(`تم تحميل بيانات المستفيد #${id}.`)
-    }
-  }
-
-  async function onSaveMedicalRecord(e: FormEvent) {
-    e.preventDefault()
-    setMsg(null)
-    setErr(null)
-
-    if (!activeBenId) {
-      setErr('حمِّل مستفيداً أولاً.')
-
-      return
-    }
-
-    try {
-      await api.createMedicalRecord({
-        clinic_appointment_id: Number.parseInt(apptForRecord, 10),
-        diagnosis,
-        tests_result: testsResult.trim() ? testsResult : null,
-        prescription: prescription.trim() ? prescription : null,
-        prescription_cost: prescriptionCost.trim()
-          ? Number.parseFloat(prescriptionCost.replace(',', '.'))
-          : null,
-        notes: notes.trim() ? notes : null,
-      })
-      setMsg('تم إغلاق الموعد وتسجيل السجل الطبي.')
-      setShowRecordDialog(false)
-      await loadForBeneficiary(activeBenId)
-    } catch (ex) {
-      setErr(extractErrorMessage(ex as Error, 'تعذّر حفظ السجل'))
     }
   }
 
@@ -189,6 +171,29 @@ export function SecretaryMedicalPage() {
     }
   }
 
+  async function onReviewPrescription(e: FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    setErr(null)
+    if (!prescriptionReviewId) {
+      setErr('اختر طلب وصفة أولاً.')
+      return
+    }
+
+    try {
+      await api.reviewMedicalPrescription(Number(prescriptionReviewId), {
+        decision: prescriptionDecision,
+        review_note: prescriptionReviewNote.trim() || null,
+      })
+      setMsg(prescriptionDecision === 'approved' ? 'تمت الموافقة على صرف الوصفة.' : 'تم رفض صرف الوصفة.')
+      setPrescriptionReviewId('')
+      setPrescriptionReviewNote('')
+      await loadPrescriptionRequests()
+    } catch (e) {
+      setErr(extractErrorMessage(e, 'تعذّر مراجعة طلب الوصفة'))
+    }
+  }
+
   return (
     <div className="space-y-10 text-sm text-white/80">
       <header className="space-y-2">
@@ -211,12 +216,19 @@ export function SecretaryMedicalPage() {
         <p className="mt-1 text-[11px] text-white/45">أدخل الرقم أو اختر اسماً من القائمة؛ يُعرض بعدها ملف هذا المريض فقط.</p>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={onLoadBeneficiary}>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-white/50">معرّف المستفيد</span>
-            <input
-              className="w-36 rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-white"
+            <span className="text-[11px] text-white/50">المستفيد</span>
+            <select
+              className="min-w-[260px] rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-white"
               value={beneficiaryIdInput}
               onChange={(e) => setBeneficiaryIdInput(e.target.value)}
-            />
+            >
+              <option value="">اختر مستفيداً</option>
+              {beneficiaryOptions.map((beneficiary) => (
+                <option key={String(beneficiary.id)} value={String(beneficiary.id)}>
+                  {String(beneficiary.name ?? 'مستفيد')} (#{String(beneficiary.id)})
+                </option>
+              ))}
+            </select>
           </label>
           <button type="submit" disabled={loading} className="rounded-lg bg-violet-600 px-4 py-2 font-medium disabled:opacity-40">
             {loading ? '…' : 'تحميل'}
@@ -231,6 +243,77 @@ export function SecretaryMedicalPage() {
             className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 font-medium text-white disabled:opacity-40"
           >
             اختر من القائمة
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-2xl border border-amber-300/20 bg-amber-500/10 p-5">
+        <h3 className="text-base font-semibold text-white">طلبات صرف الوصفات (بانتظار قرار أمين السر)</h3>
+        <p className="mt-1 text-xs text-white/55">
+          تظهر هنا فقط السجلات التي أدخل فيها الطبيب وصفة مع تكلفة أكبر من صفر.
+        </p>
+        <div className="mt-3 overflow-x-auto rounded-xl border border-white/[0.06]">
+          <table className="w-full min-w-[720px] border-collapse text-[12px]">
+            <thead>
+              <tr className="border-b border-white/10 bg-black/30 text-[10px] uppercase text-white/45">
+                <th className="px-3 py-2 font-semibold text-start"># السجل</th>
+                <th className="px-3 py-2 font-semibold text-start">المريض</th>
+                <th className="px-3 py-2 font-semibold text-start">الطبيب</th>
+                <th className="px-3 py-2 font-semibold text-start">تكلفة الوصفة</th>
+                <th className="px-3 py-2 font-semibold text-start">التاريخ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prescriptionRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-white/45">
+                    لا توجد طلبات وصفات بانتظار المراجعة حالياً.
+                  </td>
+                </tr>
+              ) : (
+                prescriptionRows.map((row, idx) => (
+                  <tr key={String(row.id)} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/12' : ''}`}>
+                    <td className="px-3 py-2 font-mono">#{String(row.id)}</td>
+                    <td className="px-3 py-2">{String((row.beneficiary as { name?: string } | undefined)?.name ?? '—')}</td>
+                    <td className="px-3 py-2">{String((row.doctor as { name?: string } | undefined)?.name ?? '—')}</td>
+                    <td className="px-3 py-2 font-mono">{String(row.prescription_cost ?? '—')}</td>
+                    <td className="px-3 py-2">{String(row.recorded_at ?? '—')}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <form className="mt-4 grid gap-2 sm:grid-cols-3" onSubmit={onReviewPrescription}>
+          <select
+            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+            value={prescriptionReviewId}
+            onChange={(e) => setPrescriptionReviewId(e.target.value)}
+          >
+            <option value="">اختر طلب الوصفة</option>
+            {prescriptionRows.map((row) => (
+              <option key={String(row.id)} value={String(row.id)}>
+                #{String(row.id)} — {String((row.beneficiary as { name?: string } | undefined)?.name ?? 'مريض')}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+            value={prescriptionDecision}
+            onChange={(e) => setPrescriptionDecision(e.target.value as 'approved' | 'rejected')}
+          >
+            <option value="approved">موافقة على الصرف</option>
+            <option value="rejected">رفض الصرف</option>
+          </select>
+          <input
+            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+            placeholder="ملاحظة (اختياري)"
+            value={prescriptionReviewNote}
+            onChange={(e) => setPrescriptionReviewNote(e.target.value)}
+          />
+          <button type="submit" className="rounded-lg bg-amber-700 py-2.5 font-medium text-white sm:col-span-3">
+            حفظ القرار
           </button>
         </form>
       </section>
@@ -307,55 +390,6 @@ export function SecretaryMedicalPage() {
                   ))
                 )}
               </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-violet-400/28 bg-white/5 p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-white">تسجيل نتيجة موعد وحفظ الوصفة</h3>
-              <button
-                type="button"
-                onClick={() => setShowRecordDialog(true)}
-                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white"
-              >
-                فتح نموذج التسجيل
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] text-white/50">
-              اختر موعداً «مجدولاً»؛ عند النجاح يُغلَق الموعد ويُنشأ سجل واحد له.
-            </p>
-            <div className="mt-3 overflow-x-auto rounded-xl border border-white/[0.06]">
-              <table className="min-w-[480px] w-full border-collapse text-[12px]">
-                <thead>
-                  <tr className="border-b border-white/10 bg-black/30 text-[10px] uppercase text-white/45">
-                    <th className="px-3 py-2 font-semibold">المريض</th>
-                    <th className="px-3 py-2 font-semibold"># موعد</th>
-                    <th className="px-3 py-2 font-semibold">الطبيب</th>
-                    <th className="px-3 py-2 font-semibold">الوقت</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduledAppts.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-white/45">
-                        لا مواعيد مجدولة لهذا المستفيد حالياً.
-                      </td>
-                    </tr>
-                  ) : null}
-                  {scheduledAppts.map((a, idx) => (
-                    <tr key={String(a.id)} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/12' : ''}`}>
-                      <td className="max-w-[8rem] truncate px-3 py-2">
-                        {String((a.beneficiary as { name?: string })?.name ?? '—')}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono">{String(a.id)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {String((a.doctor as { name?: string })?.name ?? '—')}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-white/72">{String(a.scheduled_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </section>
 
@@ -470,75 +504,6 @@ export function SecretaryMedicalPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showRecordDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-emerald-300/25 bg-slate-950 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">تسجيل نتيجة موعد وحفظ الوصفة</h3>
-              <button
-                type="button"
-                onClick={() => setShowRecordDialog(false)}
-                className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white"
-              >
-                إغلاق
-              </button>
-            </div>
-            <form className="grid gap-3 lg:grid-cols-2" onSubmit={onSaveMedicalRecord}>
-              <select
-                required
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white lg:col-span-2"
-                value={apptForRecord}
-                onChange={(e) => setApptForRecord(e.target.value)}
-              >
-                <option value="">— اختر موعداً مجدولاً —</option>
-                {scheduledAppts.map((a) => (
-                  <option key={String(a.id)} value={String(a.id)}>
-                    #{String(a.id)} — {String(a.scheduled_at)}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                required
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white lg:col-span-2"
-                placeholder="التشخيص *"
-                rows={2}
-                value={diagnosis}
-                onChange={(e) => setDiagnosis(e.target.value)}
-              />
-              <textarea
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white lg:col-span-2"
-                placeholder="خلاصة النتائج / الملخص النصّي"
-                rows={2}
-                value={testsResult}
-                onChange={(e) => setTestsResult(e.target.value)}
-              />
-              <textarea
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white lg:col-span-2"
-                placeholder="الوصفة / الأدوية"
-                rows={2}
-                value={prescription}
-                onChange={(e) => setPrescription(e.target.value)}
-              />
-              <input
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="كلفة الوصفة (اختياري)"
-                value={prescriptionCost}
-                onChange={(e) => setPrescriptionCost(e.target.value)}
-              />
-              <input
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white lg:col-span-2"
-                placeholder="ملاحظات"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-              <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-medium text-white lg:col-span-2">
-                حفظ السجل وإنهاء الموعد
-              </button>
-            </form>
           </div>
         </div>
       ) : null}
