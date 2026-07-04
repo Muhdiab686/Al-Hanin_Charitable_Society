@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Beneficiary\BeneficiaryOnboardingController;
 use App\Http\Controllers\Api\BeneficiaryController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\DonorChatController;
+use App\Http\Controllers\Api\FamilyController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/admin')->middleware(['auth:sanctum', 'permission:users.manage'])->group(function () {
@@ -23,6 +24,10 @@ Route::prefix('v1/admin')->middleware(['auth:sanctum', 'permission:users.manage'
         ->middleware('permission:beneficiaries.manage');
     Route::post('/families/{family}/approve', [BeneficiaryOnboardingController::class, 'approve'])
         ->middleware('permission:families.enrollment.review');
+    Route::get('/families/{family}/members', [FamilyController::class, 'members'])
+        ->middleware('permission:beneficiaries.view');
+    Route::get('/families/{family}/history', [FamilyController::class, 'history'])
+        ->middleware('permission:beneficiaries.view');
 
     Route::get('/campaigns', [CampaignController::class, 'index']);
     Route::post('/campaigns', [CampaignController::class, 'store']);

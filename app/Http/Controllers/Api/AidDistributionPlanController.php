@@ -81,6 +81,13 @@ class AidDistributionPlanController extends Controller
             ]);
         }
 
+        $autoUnits = filter_var($validated['auto_units'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $unitBasedTypes = ['special_item', 'medical_prescription', 'food_basket', 'stationery'];
+
+        if ($autoUnits && in_array($validated['aid_type'], $unitBasedTypes, true)) {
+            $validated['total_units'] = $eligibleFamilies->count();
+        }
+
         $plan = DB::transaction(function () use (
             $request,
             $validated,

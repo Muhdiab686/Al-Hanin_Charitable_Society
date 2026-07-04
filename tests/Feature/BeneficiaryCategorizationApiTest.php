@@ -188,4 +188,84 @@ class BeneficiaryCategorizationApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('beneficiary.category.name', 'health');
     }
+
+    public function test_family_is_classified_when_rule_requires_housing_status(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $secretary->createToken('s')->plainTextToken;
+
+        $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
+
+        $this->putJson('/api/v1/categories/'.$healthCategory->id.'/rule', [
+            'max_monthly_income' => null,
+            'min_family_members' => null,
+            'requires_medical_case' => false,
+            'housing_statuses' => ['rented'],
+            'is_active' => true,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk();
+
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'monthly_income' => 400,
+            'members_count' => 2,
+            'housing_status' => 'rented',
+        ]);
+        $beneficiary = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'category_id' => null,
+        ]);
+
+        $this->postJson('/api/v1/beneficiaries/'.$beneficiary->id.'/recalculate-category', [], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk()
+            ->assertJsonPath('beneficiary.category.name', 'health');
+    }
+
+    public function test_family_is_classified_when_rule_requires_min_children_under_18(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $secretary->createToken('s')->plainTextToken;
+
+        $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
+
+        $this->putJson('/api/v1/categories/'.$healthCategory->id.'/rule', [
+            'max_monthly_income' => null,
+            'min_family_members' => null,
+            'requires_medical_case' => false,
+            'min_children_under_18' => 2,
+            'is_active' => true,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk();
+
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'monthly_income' => 400,
+            'members_count' => 4,
+        ]);
+        $beneficiary = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'category_id' => null,
+            'is_head_of_family' => true,
+        ]);
+        Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'age' => 10,
+            'date_of_birth' => now()->subYears(10),
+        ]);
+        Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'age' => 14,
+            'date_of_birth' => now()->subYears(14),
+        ]);
+
+        $this->postJson('/api/v1/beneficiaries/'.$beneficiary->id.'/recalculate-category', [], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk()
+            ->assertJsonPath('beneficiary.category.name', 'health');
+    }
 }

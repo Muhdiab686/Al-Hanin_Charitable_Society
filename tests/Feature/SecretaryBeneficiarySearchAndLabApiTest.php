@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\Beneficiary;
+use App\Models\Category;
 use App\Models\Family;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -85,6 +86,53 @@ class SecretaryBeneficiarySearchAndLabApiTest extends TestCase
         $r3 = $this->getJson('/api/v1/beneficiaries?search=NID-SEARCH', $this->secretaryHeaders($sec));
         $r3->assertOk();
         $this->assertGreaterThanOrEqual(1, count($r3->json('data')));
+    }
+
+    public function test_beneficiary_index_filters_by_enrollment_status_and_category(): void
+    {
+        $rs = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $headers = $this->recordingSecretaryHeaders($rs);
+
+        $approvedFamily = Family::factory()->create([
+            'enrollment_status' => 'approved',
+            'head_name' => 'أسرة معتمدة',
+        ]);
+        $pendingFamily = Family::factory()->create([
+            'enrollment_status' => 'pending_board',
+            'head_name' => 'أسرة بانتظار',
+        ]);
+
+        $financialCategoryId = Category::query()->where('name', 'financial')->firstOrFail()->id;
+
+        Beneficiary::factory()->create([
+            'family_id' => $approvedFamily->id,
+            'name' => 'رب معتمد',
+            'is_head_of_family' => true,
+            'category_id' => $financialCategoryId,
+        ]);
+        Beneficiary::factory()->create([
+            'family_id' => $pendingFamily->id,
+            'name' => 'رب بانتظار',
+            'is_head_of_family' => true,
+        ]);
+
+        $approvedResponse = $this->getJson(
+            '/api/v1/beneficiaries?enrollment_status=approved&heads_only=1',
+            $headers,
+        );
+        $approvedResponse->assertOk();
+        $approvedNames = collect($approvedResponse->json('data'))->pluck('name');
+        $this->assertContains('رب معتمد', $approvedNames);
+        $this->assertNotContains('رب بانتظار', $approvedNames);
+
+        $categoryResponse = $this->getJson(
+            '/api/v1/beneficiaries?category_id='.$financialCategoryId.'&heads_only=1',
+            $headers,
+        );
+        $categoryResponse->assertOk();
+        $categoryNames = collect($categoryResponse->json('data'))->pluck('name');
+        $this->assertContains('رب معتمد', $categoryNames);
+        $this->assertNotContains('رب بانتظار', $categoryNames);
     }
 
     public function test_secretary_can_store_lab_report_with_attachment(): void

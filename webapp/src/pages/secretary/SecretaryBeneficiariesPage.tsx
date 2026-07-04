@@ -3,6 +3,8 @@ import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import type { Paginated } from '../../types/models'
 
+import { labelFamilyRelationshipAr } from '../../lib/operationalLabels'
+
 const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'draft', label: 'مسودة' },
   { value: 'under_review', label: 'قيد المراجعة' },
@@ -10,6 +12,13 @@ const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'approved', label: 'معتمدة' },
   { value: 'rejected', label: 'مرفوضة' },
 ]
+
+const HOUSING_STATUS_AR: Record<string, string> = {
+  owned: 'ملك',
+  rented: 'إيجار',
+  hosted: 'ضيافة',
+  unstable: 'غير مستقر',
+}
 
 const HEALTH_STATUS_AR: { value: string; label: string }[] = [
   { value: '', label: 'بدون حالة صحية خاصة' },
@@ -90,6 +99,21 @@ export function SecretaryBeneficiariesPage() {
   const [historyAidRequests, setHistoryAidRequests] = useState<Record<string, unknown>[]>([])
   const [historyMedicalRecords, setHistoryMedicalRecords] = useState<Record<string, unknown>[]>([])
 
+  const [filterEnrollmentStatus, setFilterEnrollmentStatus] = useState('')
+  const [filterCategoryId, setFilterCategoryId] = useState('')
+  const [categories, setCategories] = useState<Record<string, unknown>[]>([])
+
+  const [showFamilyDetail, setShowFamilyDetail] = useState(false)
+  const [detailFamilyId, setDetailFamilyId] = useState<number | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailFamily, setDetailFamily] = useState<Record<string, unknown> | null>(null)
+  const [detailMembers, setDetailMembers] = useState<Record<string, unknown>[]>([])
+  const [detailHistory, setDetailHistory] = useState<{
+    summary: Record<string, unknown>
+    aid_requests: Record<string, unknown>[]
+    medical_records: Record<string, unknown>[]
+  } | null>(null)
+
   const [createMembers, setCreateMembers] = useState<
     Array<{
       national_id: string
@@ -151,7 +175,12 @@ export function SecretaryBeneficiariesPage() {
     setErr(null)
 
     try {
-      const res = (await api.fetchBeneficiaries({ page })) as Paginated<Record<string, unknown>>
+      const res = (await api.fetchBeneficiaries({
+        page,
+        ...(filterEnrollmentStatus ? { enrollment_status: filterEnrollmentStatus } : {}),
+        ...(filterCategoryId ? { category_id: Number(filterCategoryId) } : {}),
+        ...(filterEnrollmentStatus || filterCategoryId ? { heads_only: true } : {}),
+      })) as Paginated<Record<string, unknown>>
       setRows((res.data as Record<string, unknown>[]) ?? [])
       setLastPage(Math.max(1, res.last_page))
       setTotalBeneficiaries(res.total ?? 0)
@@ -160,7 +189,13 @@ export function SecretaryBeneficiariesPage() {
     } finally {
       setLoading(false)
     }
-  }, [page])
+  }, [page, filterEnrollmentStatus, filterCategoryId])
+
+  useEffect(() => {
+    void api.fetchCategoryRules()
+      .then((r) => setCategories(r.categories ?? []))
+      .catch(() => setCategories([]))
+  }, [])
 
   useEffect(() => {
     void load()
@@ -473,6 +508,58 @@ export function SecretaryBeneficiariesPage() {
     setShowEditDialog(true)
   }
 
+  function closeFamilyDetail() {
+    setShowFamilyDetail(false)
+    setDetailFamilyId(null)
+    setDetailFamily(null)
+    setDetailMembers([])
+    setDetailHistory(null)
+    setDetailLoading(false)
+  }
+
+  async function openFamilyDetail(familyId: number) {
+    setDetailFamilyId(familyId)
+    setShowFamilyDetail(true)
+    setDetailLoading(true)
+    setDetailFamily(null)
+    setDetailMembers([])
+    setDetailHistory(null)
+    setErr(null)
+
+    try {
+      const [membersRes, historyRes] = await Promise.all([
+        api.fetchFamilyMembers(familyId),
+        api.fetchFamilyHistory(familyId),
+      ])
+      setDetailFamily(membersRes.family)
+      setDetailMembers(membersRes.members ?? [])
+      setDetailHistory({
+        summary: historyRes.summary ?? {},
+        aid_requests: historyRes.aid_requests ?? [],
+        medical_records: historyRes.medical_records ?? [],
+      })
+    } catch (e) {
+      setErr(extractErrorMessage(e, 'تعذّر تحميل تفاصيل العائلة'))
+      closeFamilyDetail()
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  function enrollLabelFor(status: unknown): string {
+    return ENROLL_AR.find((e) => e.value === status)?.label ?? String(status ?? '—')
+  }
+
+  function housingLabelFor(status: unknown): string {
+    const key = String(status ?? '').trim()
+    return HOUSING_STATUS_AR[key] ?? (key || '—')
+  }
+
+  function healthLabelFor(status: unknown): string {
+    const key = String(status ?? '').trim()
+    return HEALTH_STATUS_AR.find((h) => h.value === key)?.label ?? (key || '—')
+  }
+
   return (
     <div className="space-y-8 text-sm">
       {(msg || err) && (
@@ -482,6 +569,113 @@ export function SecretaryBeneficiariesPage() {
           {err ?? msg}
         </div>
       )}
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-base font-semibold text-white">تصفية العائلات حسب حالة القبول والتصنيف</h2>
+        <p className="mt-1 text-xs text-white/50">اختر حالة القبول أو التصنيف لعرض العائلات — اضغط على أي صف لعرض التفاصيل الكاملة.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-white/45">حالة القبول</label>
+            <select
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={filterEnrollmentStatus}
+              onChange={(e) => {
+                setFilterEnrollmentStatus(e.target.value)
+                setPage(1)
+              }}
+            >
+              <option value="">الكل</option>
+              {ENROLL_AR.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-white/45">التصنيف</label>
+            <select
+              className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+              value={filterCategoryId}
+              onChange={(e) => {
+                setFilterCategoryId(e.target.value)
+                setPage(1)
+              }}
+            >
+              <option value="">الكل</option>
+              {categories.map((cat) => (
+                <option key={String(cat.id)} value={String(cat.id)}>
+                  {String(cat.name ?? `فئة #${String(cat.id)}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {(filterEnrollmentStatus || filterCategoryId) && (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-white/[0.06]">
+            <table className="w-full min-w-[720px] border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-black/30 text-[10px] uppercase tracking-wide text-white/45">
+                  <th className="px-3 py-2.5 font-semibold">كود العائلة</th>
+                  <th className="px-3 py-2.5 font-semibold">رب الأسرة</th>
+                  <th className="px-3 py-2.5 font-semibold">عدد الأفراد</th>
+                  <th className="px-3 py-2.5 font-semibold">التصنيف</th>
+                  <th className="px-3 py-2.5 font-semibold">حالة القبول</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-white/50">
+                      جاري التحميل…
+                    </td>
+                  </tr>
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-white/45">
+                      لا عائلات مطابقة.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((r, idx) => {
+                    const fam = r.family as {
+                      id?: number
+                      family_code?: string
+                      head_name?: string
+                      members_count?: number
+                      enrollment_status?: string
+                    } | undefined
+                    const category = r.category as { name?: string } | undefined
+                    const enrollLabel = enrollLabelFor(fam?.enrollment_status)
+
+                    return (
+                      <tr
+                        key={String(r.id)}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => fam?.id && void openFamilyDetail(fam.id)}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ' ') && fam?.id) {
+                            e.preventDefault()
+                            void openFamilyDetail(fam.id)
+                          }
+                        }}
+                        className={`cursor-pointer border-b border-white/[0.06] transition hover:bg-violet-500/10 ${idx % 2 === 0 ? 'bg-black/15' : ''}`}
+                      >
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-violet-200/95">{String(fam?.family_code ?? '—')}</td>
+                        <td className="px-3 py-2.5 font-medium text-white">{String(fam?.head_name ?? (r as { name?: string }).name ?? '—')}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{String(fam?.members_count ?? '—')}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-white/80">{String(category?.name ?? '—')}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-white/80">{enrollLabel}</td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -576,7 +770,19 @@ export function SecretaryBeneficiariesPage() {
                     >
                       <td className="px-3 py-2.5 font-medium text-white">{String((r as { name?: string }).name ?? '—')}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px]">{String(r.national_id ?? '—')}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-violet-200/95">{String(fam?.family_code ?? '—')}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-violet-200/95">
+                        {fam?.id ? (
+                          <button
+                            type="button"
+                            onClick={() => void openFamilyDetail(fam.id!)}
+                            className="underline decoration-violet-300/40 hover:text-violet-100"
+                          >
+                            {String(fam.family_code ?? '—')}
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-emerald-100">
                         {familyCredentials?.email ?? '—'}
                       </td>
@@ -1235,6 +1441,152 @@ export function SecretaryBeneficiariesPage() {
                 حفظ تعديل الأسرة
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showFamilyDetail ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950 p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">تفاصيل العائلة</h2>
+                <p className="mt-1 text-xs text-white/50">
+                  {detailFamily
+                    ? `${String(detailFamily.family_code ?? '')} — ${String(detailFamily.head_name ?? '')}`
+                    : detailFamilyId
+                      ? `عائلة #${detailFamilyId}`
+                      : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeFamilyDetail}
+                className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white hover:bg-white/10"
+              >
+                إغلاق
+              </button>
+            </div>
+
+            {detailLoading ? (
+              <p className="mt-8 text-center text-white/60">جاري تحميل التفاصيل…</p>
+            ) : detailFamily ? (
+              <div className="mt-5 space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    ['كود العائلة', String(detailFamily.family_code ?? '—')],
+                    ['رب الأسرة', String(detailFamily.head_name ?? '—')],
+                    ['عدد الأفراد', String(detailFamily.members_count ?? '—')],
+                    ['الجوال', String(detailFamily.phone ?? '—')],
+                    ['العنوان', String(detailFamily.address ?? '—')],
+                    ['الحي', String(detailFamily.neighborhood ?? '—')],
+                    ['الدخل الشهري', String(detailFamily.monthly_income ?? '—')],
+                    ['وضع السكن', housingLabelFor(detailFamily.housing_status)],
+                    ['حالة القبول', enrollLabelFor(detailFamily.enrollment_status)],
+                    ['دخل مباشر', detailFamily.has_direct_income ? 'نعم' : 'لا'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+                      <p className="text-[10px] text-white/45">{label}</p>
+                      <p className="mt-0.5 text-sm text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {detailHistory ? (
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    {[
+                      ['أفراد مسجّلون', String(detailHistory.summary.beneficiaries_count ?? detailMembers.length)],
+                      ['طلبات مساعدة', String(detailHistory.summary.aid_requests_count ?? detailHistory.aid_requests.length)],
+                      ['تسليمات عينية', String(detailHistory.summary.delivered_allocations_count ?? '—')],
+                      ['سجلات طبية', String(detailHistory.summary.medical_records_count ?? detailHistory.medical_records.length)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-center">
+                        <p className="text-[10px] text-emerald-100/70">{label}</p>
+                        <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-violet-100">أفراد العائلة ({detailMembers.length})</h3>
+                  <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+                    <table className="w-full min-w-[760px] border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 bg-black/30 text-[10px] uppercase tracking-wide text-white/45">
+                          <th className="px-3 py-2 font-semibold">الاسم</th>
+                          <th className="px-3 py-2 font-semibold">القرابة</th>
+                          <th className="px-3 py-2 font-semibold">رقم وطني</th>
+                          <th className="px-3 py-2 font-semibold">تاريخ الميلاد</th>
+                          <th className="px-3 py-2 font-semibold">العمر</th>
+                          <th className="px-3 py-2 font-semibold">الحالة الصحية</th>
+                          <th className="px-3 py-2 font-semibold">التصنيف</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailMembers.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-3 py-6 text-center text-white/45">
+                              لا أفراد مسجّلين.
+                            </td>
+                          </tr>
+                        ) : (
+                          detailMembers.map((member, idx) => {
+                            const category = member.category as { name?: string } | undefined
+                            return (
+                              <tr
+                                key={String(member.id ?? idx)}
+                                className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/15' : ''}`}
+                              >
+                                <td className="px-3 py-2 font-medium text-white">{String(member.name ?? '—')}</td>
+                                <td className="px-3 py-2 text-white/80">
+                                  {labelFamilyRelationshipAr(member.family_relationship)}
+                                </td>
+                                <td className="px-3 py-2 font-mono">{String(member.national_id ?? '—')}</td>
+                                <td className="px-3 py-2 font-mono">{String(member.date_of_birth ?? '—').slice(0, 10)}</td>
+                                <td className="px-3 py-2 tabular-nums">{String(member.age ?? '—')}</td>
+                                <td className="px-3 py-2 text-white/80">{healthLabelFor(member.health_status)}</td>
+                                <td className="px-3 py-2 text-white/80">{String(category?.name ?? '—')}</td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {detailHistory && detailHistory.aid_requests.length > 0 ? (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-violet-100">آخر طلبات المساعدة</h3>
+                    <ul className="space-y-1 text-xs text-white/75">
+                      {detailHistory.aid_requests.slice(0, 5).map((req) => (
+                        <li key={String(req.id)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                          #{String(req.id)} — {String(req.type ?? '—')} — {String(req.status ?? '—')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {detailHistory && detailHistory.medical_records.length > 0 ? (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-violet-100">آخر السجلات الطبية</h3>
+                    <ul className="space-y-1 text-xs text-white/75">
+                      {detailHistory.medical_records.slice(0, 5).map((rec) => (
+                        <li key={String(rec.id)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                          #{String(rec.id)} — {String(rec.diagnosis_name ?? rec.title ?? 'سجل طبي')} — {String(rec.prescription_workflow_status ?? '—')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -47,6 +47,21 @@ class BeneficiaryController extends Controller
             });
         }
 
+        $enrollmentStatus = trim((string) $request->query('enrollment_status', ''));
+        if ($enrollmentStatus !== '') {
+            $query->whereHas('family', function (Builder $fam) use ($enrollmentStatus): void {
+                $fam->where('enrollment_status', $enrollmentStatus);
+            });
+        }
+
+        if ($request->filled('category_id')) {
+            $query->where('category_id', (int) $request->query('category_id'));
+        }
+
+        if (filter_var($request->query('heads_only'), FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('is_head_of_family', true);
+        }
+
         return response()->json($query->paginate(15));
     }
 

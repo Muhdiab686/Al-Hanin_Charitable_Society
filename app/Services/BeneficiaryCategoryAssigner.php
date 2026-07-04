@@ -16,7 +16,7 @@ class BeneficiaryCategoryAssigner
 
     public function assign(Beneficiary $beneficiary): ?int
     {
-        $beneficiary->loadMissing('family');
+        $beneficiary->loadMissing(['family.beneficiaries']);
 
         $categories = Category::query()
             ->with(['rules' => fn ($query) => $query->where('is_active', true)])
@@ -68,6 +68,26 @@ class BeneficiaryCategoryAssigner
             return false;
         }
 
+        if ($rule->housing_statuses !== null && $rule->housing_statuses !== []) {
+            $familyHousing = strtolower(trim((string) ($family->housing_status ?? '')));
+            $allowedStatuses = array_map(
+                fn ($status): string => strtolower(trim((string) $status)),
+                $rule->housing_statuses,
+            );
+
+            if ($familyHousing === '' || ! in_array($familyHousing, $allowedStatuses, true)) {
+                return false;
+            }
+        }
+
+        if ($rule->min_children_under_18 !== null && $this->countChildrenUnder18($family) < (int) $rule->min_children_under_18) {
+            return false;
+        }
+
+        if ($rule->min_adults !== null && $this->countAdults($family) < (int) $rule->min_adults) {
+            return false;
+        }
+
         return true;
     }
 
@@ -104,5 +124,40 @@ class BeneficiaryCategoryAssigner
                 return false;
             }
         })->count();
+    }
+
+    private function countChildrenUnder18(Family $family): int
+    {
+        return $family->beneficiaries->filter(function (Beneficiary $member): bool {
+            $age = $this->ageValue($member->age, $member->date_of_birth);
+
+            return $age !== null && $age < 18;
+        })->count();
+    }
+
+    private function countAdults(Family $family): int
+    {
+        return $family->beneficiaries->filter(function (Beneficiary $member): bool {
+            $age = $this->ageValue($member->age, $member->date_of_birth);
+
+            return $age !== null && $age >= 18;
+        })->count();
+    }
+
+    private function ageValue(mixed $age, mixed $dateOfBirth): ?int
+    {
+        if ($age !== null) {
+            return (int) $age;
+        }
+
+        if ($dateOfBirth === null) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($dateOfBirth)->age;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

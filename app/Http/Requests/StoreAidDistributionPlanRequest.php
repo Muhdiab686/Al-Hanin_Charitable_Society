@@ -21,10 +21,11 @@ class StoreAidDistributionPlanRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription'])],
+            'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription', 'food_basket', 'stationery'])],
             'campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
             'distribution_date' => ['required', 'date'],
             'distribution_frequency' => ['nullable', Rule::in(['once', 'quarterly', 'yearly'])],
+            'auto_units' => ['nullable', 'boolean'],
             'total_amount' => ['nullable', 'numeric', 'min:0.01'],
             'total_units' => ['nullable', 'integer', 'min:1'],
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -48,12 +49,15 @@ class StoreAidDistributionPlanRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $aidType = (string) $this->input('aid_type');
+            $autoUnits = filter_var($this->input('auto_units'), FILTER_VALIDATE_BOOLEAN);
 
             if ($aidType === 'urgent_financial' && ! $this->filled('total_amount')) {
                 $validator->errors()->add('total_amount', __('Total amount is required for financial plans.'));
             }
 
-            if (in_array($aidType, ['special_item', 'medical_prescription'], true) && ! $this->filled('total_units')) {
+            $unitBasedTypes = ['special_item', 'medical_prescription', 'food_basket', 'stationery'];
+
+            if (in_array($aidType, $unitBasedTypes, true) && ! $autoUnits && ! $this->filled('total_units')) {
                 $validator->errors()->add('total_units', __('Total units are required for item-based plans.'));
             }
         });

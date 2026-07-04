@@ -83,6 +83,18 @@ class FamilyMemberApiTest extends TestCase
         $this->getJson('/api/v1/families/'.$family->id.'/members', $headers)
             ->assertOk()
             ->assertJsonPath('family.id', $family->id)
-            ->assertJsonStructure(['members']);
+            ->assertJsonStructure([
+                'family' => [
+                    'id',
+                    'family_code',
+                    'head_name',
+                    'members_count',
+                    'phone',
+                    'address',
+                    'housing_status',
+                    'enrollment_status',
+                ],
+                'members',
+            ]);
     }
 }

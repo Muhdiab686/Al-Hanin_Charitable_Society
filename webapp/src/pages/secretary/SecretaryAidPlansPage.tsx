@@ -18,6 +18,7 @@ export function SecretaryAidPlansPage() {
   const [units, setUnits] = useState('100')
   const [amount, setAmount] = useState('')
   const [frequency, setFrequency] = useState<'once' | 'quarterly' | 'yearly'>('once')
+  const [autoUnits, setAutoUnits] = useState(false)
   const [minChildrenUnder18, setMinChildrenUnder18] = useState('')
   const [minAdults, setMinAdults] = useState('')
   const [housingStatuses, setHousingStatuses] = useState('')
@@ -118,6 +119,8 @@ export function SecretaryAidPlansPage() {
       return
     }
 
+    const isFinancial = aidType === 'urgent_financial'
+
     const body = {
       title,
       aid_type: aidType,
@@ -127,9 +130,11 @@ export function SecretaryAidPlansPage() {
       ...(campaignId ? { campaign_id: Number(campaignId) } : {}),
       filter_criteria: buildFilterCriteria(),
       ...(selectedFamilyIds.size > 0 ? { selected_family_ids: Array.from(selectedFamilyIds) } : {}),
-      ...(aidType === 'urgent_financial'
+      ...(isFinancial
         ? { total_amount: Number(amount || '500') }
-        : { total_units: Number(units) }),
+        : autoUnits
+          ? { auto_units: true }
+          : { total_units: Number(units) }),
     }
     try {
       await api.createAidDistributionPlan(body)
@@ -310,6 +315,8 @@ export function SecretaryAidPlansPage() {
               <option value="urgent_financial">دعم معيشي عاجل</option>
               <option value="special_item">مواد أو عينية خاصة</option>
               <option value="medical_prescription">وصفة طبيّة / صرف دوائي</option>
+              <option value="food_basket">سلة غذائية</option>
+              <option value="stationery">قرطاسية</option>
             </select>
           </div>
           <div>
@@ -359,15 +366,35 @@ export function SecretaryAidPlansPage() {
               />
             </div>
           ) : (
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-[11px] font-medium text-white/45">عدد الوحدات</label>
-              <input
-                className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
-                placeholder="مثال: 100"
-                value={units}
-                onChange={(e) => setUnits(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={autoUnits}
+                    onChange={(e) => setAutoUnits(e.target.checked)}
+                  />
+                  حساب الكمية تلقائيًا (وحدة واحدة لكل عائلة مختارة)
+                </label>
+              </div>
+              {!autoUnits ? (
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-[11px] font-medium text-white/45">عدد الوحدات</label>
+                  <input
+                    className="w-full rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+                    placeholder="مثال: 100"
+                    value={units}
+                    onChange={(e) => setUnits(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="sm:col-span-2 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                  {selectedFamilyIds.size > 0
+                    ? `سيتم حساب ${selectedFamilyIds.size} وحدة تلقائيًا (وحدة لكل عائلة مختارة).`
+                    : 'سيتم حساب الكمية تلقائيًا بعد معاينة واختيار العائلات (وحدة لكل عائلة).'}
+                </div>
+              )}
+            </>
           )}
           <div>
             <label className="mb-1 block text-[11px] font-medium text-white/45">حد أدنى أطفال (&lt; 18)</label>

@@ -178,6 +178,42 @@ class AidDistributionPlanApiTest extends TestCase
             ->assertJsonCount(1, 'plan.lines');
     }
 
+    public function test_food_basket_plan_auto_units_equals_selected_families_count(): void
+    {
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+
+        $familyA = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'has_direct_income' => false,
+        ]);
+        $familyB = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'has_direct_income' => false,
+        ]);
+
+        Beneficiary::factory()->create(['family_id' => $familyA->id]);
+        Beneficiary::factory()->create(['family_id' => $familyB->id]);
+
+        $response = $this->postJson('/api/v1/aid-distribution-plans', [
+            'title' => 'Food basket quarterly plan',
+            'aid_type' => 'food_basket',
+            'distribution_date' => now()->toDateString(),
+            'distribution_frequency' => 'quarterly',
+            'auto_units' => true,
+            'selected_family_ids' => [$familyA->id, $familyB->id],
+        ], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk-auto')->plainTextToken,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('plan.aid_type', 'food_basket')
+            ->assertJsonPath('plan.eligible_families_count', 2)
+            ->assertJsonPath('plan.total_units', 2)
+            ->assertJsonPath('plan.projected_annual_units', 8)
+            ->assertJsonCount(2, 'plan.lines');
+    }
+
     public function test_storekeeper_can_mark_plan_cycle_as_completed(): void
     {
         $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);

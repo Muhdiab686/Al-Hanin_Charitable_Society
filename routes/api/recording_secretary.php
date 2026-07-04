@@ -32,6 +32,8 @@ Route::prefix('v1/recording-secretary')->middleware(['auth:sanctum', 'role:recor
         ->middleware('permission:beneficiaries.manage');
     Route::get('/families/{family}/members', [FamilyController::class, 'members'])
         ->middleware('permission:beneficiaries.view');
+    Route::get('/families/{family}/history', [FamilyController::class, 'history'])
+        ->middleware('permission:beneficiaries.view');
     Route::post('/families/{family}/members', [FamilyController::class, 'storeMember'])
         ->middleware('permission:beneficiaries.manage');
 

@@ -4,6 +4,8 @@ const AID_TYPE_AR: Record<string, string> = {
   urgent_financial: 'دعم معيشي عاجل',
   special_item: 'مواد أو عينية خاصة',
   medical_prescription: 'وصفة طبيّة / صرف دوائي',
+  food_basket: 'سلة غذائية',
+  stationery: 'قرطاسية',
 }
 
 const AID_STATUS_AR: Record<string, string> = {

@@ -17,6 +17,9 @@ class CategoryRule extends Model
         'requires_medical_case',
         'requires_health_condition',
         'min_newborns',
+        'housing_statuses',
+        'min_children_under_18',
+        'min_adults',
         'is_active',
     ];
 
@@ -29,6 +32,7 @@ class CategoryRule extends Model
             'max_monthly_income' => 'decimal:2',
             'requires_medical_case' => 'boolean',
             'requires_health_condition' => 'boolean',
+            'housing_statuses' => 'array',
             'is_active' => 'boolean',
         ];
     }

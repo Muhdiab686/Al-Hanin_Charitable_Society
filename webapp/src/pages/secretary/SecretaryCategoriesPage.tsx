@@ -2,6 +2,13 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 
+const HOUSING_OPTIONS = [
+  { value: 'owned', label: 'ملك' },
+  { value: 'rented', label: 'إيجار' },
+  { value: 'hosted', label: 'ضيافة' },
+  { value: 'unstable', label: 'غير مستقر' },
+] as const
+
 export function SecretaryCategoriesPage() {
   const [categories, setCategories] = useState<Record<string, unknown>[]>([])
   const [err, setErr] = useState<string | null>(null)
@@ -34,18 +41,37 @@ export function SecretaryCategoriesPage() {
     }))
   }
 
+  function housingChecked(catId: number, value: string, rules: Record<string, unknown>): boolean {
+    const row = edits[catId] ?? {}
+    if (row[`housing_${value}`] !== undefined) {
+      return row[`housing_${value}`] === '1'
+    }
+    const statuses = rules.housing_statuses as string[] | undefined
+
+    return Array.isArray(statuses) && statuses.includes(value)
+  }
+
   async function onSave(e: FormEvent, catId: number) {
     e.preventDefault()
     setMsg(null)
     setErr(null)
     const row = edits[catId] ?? {}
+    const rulesList = categories.find((c) => Number(c.id) === catId)?.rules as Record<string, unknown>[] | Record<string, unknown> | undefined
+    const rules = (Array.isArray(rulesList) ? rulesList[0] : rulesList) ?? {}
     try {
+      const housingStatuses = HOUSING_OPTIONS
+        .filter((opt) => housingChecked(catId, opt.value, rules as Record<string, unknown>))
+        .map((opt) => opt.value)
+
       await api.upsertCategoryRule(catId, {
         max_monthly_income: row.max ? Number(row.max) : null,
         min_family_members: row.min ? Number(row.min) : null,
         requires_medical_case: row.req === '1' || row.req === 'true',
         requires_health_condition: row.health === '1' || row.health === 'true',
         min_newborns: row.newborns ? Number(row.newborns) : null,
+        housing_statuses: housingStatuses.length > 0 ? housingStatuses : null,
+        min_children_under_18: row.childrenUnder18 ? Number(row.childrenUnder18) : null,
+        min_adults: row.adults ? Number(row.adults) : null,
         is_active: row.active !== '0' && row.active !== 'false',
       })
       setMsg('تم حفظ القاعدة.')
@@ -115,6 +141,37 @@ export function SecretaryCategoriesPage() {
                     onChange={(e) => setField(id, 'newborns', e.target.value)}
                   />
                 </label>
+                <label className="text-white/70">
+                  min_children_under_18 — حد أدنى أطفال تحت 18
+                  <input
+                    className="mt-1 w-full rounded border border-white/15 bg-slate-950/50 px-2 py-1 text-white"
+                    value={field(id, 'childrenUnder18', String(rules.min_children_under_18 ?? ''))}
+                    onChange={(e) => setField(id, 'childrenUnder18', e.target.value)}
+                  />
+                </label>
+                <label className="text-white/70">
+                  min_adults — حد أدنى بالغين (18+)
+                  <input
+                    className="mt-1 w-full rounded border border-white/15 bg-slate-950/50 px-2 py-1 text-white"
+                    value={field(id, 'adults', String(rules.min_adults ?? ''))}
+                    onChange={(e) => setField(id, 'adults', e.target.value)}
+                  />
+                </label>
+                <div className="sm:col-span-2">
+                  <p className="text-white/70">housing_statuses — حالات السكن المعطاة أولوية</p>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {HOUSING_OPTIONS.map((opt) => (
+                      <label key={opt.value} className="flex items-center gap-2 text-white/85">
+                        <input
+                          type="checkbox"
+                          checked={housingChecked(id, opt.value, rules as Record<string, unknown>)}
+                          onChange={(e) => setField(id, `housing_${opt.value}`, e.target.checked ? '1' : '0')}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <label className="text-white/70">
                   is_active (1/0)
                   <input

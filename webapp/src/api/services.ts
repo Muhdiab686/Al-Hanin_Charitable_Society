@@ -121,6 +121,9 @@ export async function fetchBeneficiaries(params?: {
   page?: number
   /** بحث متقدّم: الاسم، الرقم الوطني، معرّف المستفيد أو العائلة، أو كود العائلة */
   search?: string
+  enrollment_status?: string
+  category_id?: number
+  heads_only?: boolean
 }): Promise<Paginated<Record<string, unknown>>> {
   const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(
     `${v1}/beneficiaries`,
@@ -461,6 +464,9 @@ export async function upsertCategoryRule(
     requires_medical_case: boolean
     requires_health_condition?: boolean
     min_newborns?: number | null
+    housing_statuses?: string[] | null
+    min_children_under_18?: number | null
+    min_adults?: number | null
     is_active: boolean
   },
 ): Promise<unknown> {

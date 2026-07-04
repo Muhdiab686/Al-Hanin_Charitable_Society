@@ -161,7 +161,21 @@ class FamilyController extends Controller
             ->get();
 
         return response()->json([
-            'family' => $family->only(['id', 'family_code', 'head_name', 'members_count']),
+            'family' => $family->only([
+                'id',
+                'family_code',
+                'head_name',
+                'members_count',
+                'phone',
+                'address',
+                'neighborhood',
+                'monthly_income',
+                'housing_status',
+                'enrollment_status',
+                'has_direct_income',
+                'aid_paused_at',
+                'created_at',
+            ]),
             'members' => $members,
         ]);
     }
