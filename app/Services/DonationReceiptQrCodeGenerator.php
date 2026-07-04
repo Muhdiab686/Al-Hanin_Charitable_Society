@@ -19,7 +19,7 @@ final class DonationReceiptQrCodeGenerator
             'id='.$donation->id,
             'receipt='.$donation->receipt_code,
             'amount='.$donation->cash_amount,
-            'campaign='.(string) ($donation->campaign_id ?? ''),
+            'campaign='.($donation->campaign?->campaign_code ?? ''),
         ]);
     }
 

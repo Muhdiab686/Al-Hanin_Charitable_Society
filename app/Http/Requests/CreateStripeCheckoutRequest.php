@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Campaign;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class CreateStripeCheckoutRequest extends FormRequest
 {
@@ -26,5 +28,17 @@ class CreateStripeCheckoutRequest extends FormRequest
             'success_url' => ['nullable', 'url'],
             'cancel_url' => ['nullable', 'url'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->filled('campaign_id')) {
+                $campaign = Campaign::query()->find($this->input('campaign_id'));
+                if ($campaign !== null && ! $campaign->isOpenForDonations()) {
+                    $validator->errors()->add('campaign_id', __('This campaign is not open for donations.'));
+                }
+            }
+        });
     }
 }

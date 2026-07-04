@@ -53,13 +53,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     });
 
     Route::get('/beneficiaries', [BeneficiaryController::class, 'index'])
-        ->middleware('role_or_permission:secretary|beneficiaries.view');
+        ->middleware('role_or_permission:secretary|recording_secretary|beneficiaries.view');
     Route::post('/beneficiaries', [BeneficiaryController::class, 'store'])
         ->middleware('permission:beneficiaries.manage');
     Route::post('/beneficiaries/onboard', [BeneficiaryOnboardingController::class, 'onboard'])
         ->middleware('permission:beneficiaries.manage');
     Route::get('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'show'])
-        ->middleware('role_or_permission:secretary|beneficiaries.view');
+        ->middleware('role_or_permission:secretary|recording_secretary|beneficiaries.view');
     Route::patch('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
         ->middleware('permission:beneficiaries.manage');
     Route::post('/beneficiaries/{beneficiary}/recalculate-category', [BeneficiaryController::class, 'recalculateCategory'])
@@ -69,9 +69,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/beneficiaries/{beneficiary}/medical-wallet/credits', [BeneficiaryMedicalWalletController::class, 'credit'])
         ->middleware('permission:medical.records.manage');
     Route::get('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'index'])
-        ->middleware('role_or_permission:secretary|beneficiaries.view|beneficiaries.manage');
+        ->middleware('role_or_permission:secretary|recording_secretary|beneficiaries.view|beneficiaries.manage');
     Route::post('/beneficiaries/{beneficiary}/lab-reports', [BeneficiaryLabReportController::class, 'store'])
-        ->middleware('role_or_permission:secretary|beneficiaries.manage');
+        ->middleware('role_or_permission:secretary|recording_secretary|beneficiaries.manage');
 
     Route::get('/beneficiary/dashboard', [BeneficiaryDashboardController::class, 'show'])
         ->middleware('role:beneficiary');
@@ -116,6 +116,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/aid-distribution-plans', [AidDistributionPlanController::class, 'index'])
         ->middleware('permission:aid.distribute|aid.request.review');
+    Route::post('/aid-distribution-plans/candidates', [AidDistributionPlanController::class, 'candidates'])
+        ->middleware('permission:aid.distribute|aid.request.review');
     Route::post('/aid-distribution-plans', [AidDistributionPlanController::class, 'store'])
         ->middleware('permission:aid.distribute|aid.request.review');
     Route::patch('/aid-distribution-plans/{aidDistributionPlan}/complete-cycle', [AidDistributionPlanController::class, 'completeCycle'])
@@ -127,10 +129,18 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:beneficiaries.manage');
 
     Route::get('/campaigns', [CampaignController::class, 'index'])
-        ->middleware('role_or_permission:recording_secretary|finance.reports.view|users.manage');
+        ->middleware('role_or_permission:recording_secretary|finance.reports.view|finance.expenses.manage|users.manage');
     Route::post('/campaigns', [CampaignController::class, 'store'])
         ->middleware('role_or_permission:recording_secretary|users.manage');
     Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
+    Route::patch('/campaigns/{campaign}', [CampaignController::class, 'update'])
+        ->middleware('role_or_permission:recording_secretary|users.manage');
+    Route::post('/campaigns/{campaign}/publish', [CampaignController::class, 'publish'])
+        ->middleware('role_or_permission:recording_secretary|users.manage');
+    Route::post('/campaigns/{campaign}/close', [CampaignController::class, 'close'])
+        ->middleware('role_or_permission:recording_secretary|users.manage');
+    Route::get('/campaigns/{campaign}/wallet', [CampaignController::class, 'wallet'])
+        ->middleware('role_or_permission:recording_secretary|finance.reports.view|finance.expenses.manage|users.manage');
 
     Route::get('/donations', [DonationController::class, 'index'])
         ->middleware('permission:donations.view|inventory.view');

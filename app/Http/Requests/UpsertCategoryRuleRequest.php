@@ -21,6 +21,8 @@ class UpsertCategoryRuleRequest extends FormRequest
             'max_monthly_income' => ['nullable', 'numeric', 'min:0'],
             'min_family_members' => ['nullable', 'integer', 'min:1'],
             'requires_medical_case' => ['required', 'boolean'],
+            'requires_health_condition' => ['sometimes', 'boolean'],
+            'min_newborns' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['required', 'boolean'],
         ];
     }

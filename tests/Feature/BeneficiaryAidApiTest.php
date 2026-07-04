@@ -22,8 +22,8 @@ class BeneficiaryAidApiTest extends TestCase
 
     public function test_secretary_can_create_beneficiary_with_family(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $token = $secretary->createToken('test-device')->plainTextToken;
 
@@ -51,8 +51,8 @@ class BeneficiaryAidApiTest extends TestCase
 
     public function test_secretary_can_create_family_as_enrollment_draft(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $token = $secretary->createToken('test-device')->plainTextToken;
 

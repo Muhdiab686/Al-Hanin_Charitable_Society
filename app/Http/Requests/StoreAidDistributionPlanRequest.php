@@ -39,6 +39,8 @@ class StoreAidDistributionPlanRequest extends FormRequest
             'filter_criteria.housing_statuses' => ['nullable', 'array'],
             'filter_criteria.housing_statuses.*' => ['string', 'max:100'],
             'filter_criteria.urgent_need' => ['nullable', 'string', 'max:100'],
+            'selected_family_ids' => ['nullable', 'array', 'min:1'],
+            'selected_family_ids.*' => ['integer', 'exists:families,id'],
         ];
     }
 

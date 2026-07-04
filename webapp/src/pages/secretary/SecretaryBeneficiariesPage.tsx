@@ -11,6 +11,14 @@ const ENROLL_AR: { value: string; label: string }[] = [
   { value: 'rejected', label: 'مرفوضة' },
 ]
 
+const HEALTH_STATUS_AR: { value: string; label: string }[] = [
+  { value: '', label: 'بدون حالة صحية خاصة' },
+  { value: 'healthy', label: 'سليم' },
+  { value: 'chronic_illness', label: 'مرض مزمن' },
+  { value: 'disability', label: 'إعاقة' },
+  { value: 'needs_special_care', label: 'يحتاج رعاية خاصة' },
+]
+
 export function SecretaryBeneficiariesPage() {
   const CREDENTIALS_CACHE_KEY = 'hanin_generated_family_credentials'
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
@@ -35,6 +43,8 @@ export function SecretaryBeneficiariesPage() {
   const [nationalId, setNationalId] = useState('')
   const [benPhone, setBenPhone] = useState('')
   const [benDob, setBenDob] = useState('')
+  const [benHealthStatus, setBenHealthStatus] = useState('')
+  const [benHealthDetails, setBenHealthDetails] = useState('')
   const [benNotes, setBenNotes] = useState('')
 
   const [editId, setEditId] = useState('')
@@ -42,6 +52,8 @@ export function SecretaryBeneficiariesPage() {
   const [editNationalId, setEditNationalId] = useState('')
   const [editPhone, setEditPhone] = useState('')
   const [editDob, setEditDob] = useState('')
+  const [editHealthStatus, setEditHealthStatus] = useState('')
+  const [editHealthDetails, setEditHealthDetails] = useState('')
 
   const [famEnrollId, setFamEnrollId] = useState('')
   const [enrollStatus, setEnrollStatus] = useState('pending_board')
@@ -62,6 +74,15 @@ export function SecretaryBeneficiariesPage() {
   const [hasIncome, setHasIncome] = useState('0')
   const [pauseReason, setPauseReason] = useState('')
 
+  const [memberFamilyId, setMemberFamilyId] = useState('')
+  const [memberName, setMemberName] = useState('')
+  const [memberNationalId, setMemberNationalId] = useState('')
+  const [memberRelationship, setMemberRelationship] = useState('child')
+  const [memberGender, setMemberGender] = useState('')
+  const [memberDob, setMemberDob] = useState('')
+  const [memberHealthStatus, setMemberHealthStatus] = useState('')
+  const [memberHealthDetails, setMemberHealthDetails] = useState('')
+
   const [qrFamilyId, setQrFamilyId] = useState('')
   const [qrImg, setQrImg] = useState<string | null>(null)
   const [historyFamilyId, setHistoryFamilyId] = useState('')
@@ -70,8 +91,16 @@ export function SecretaryBeneficiariesPage() {
   const [historyMedicalRecords, setHistoryMedicalRecords] = useState<Record<string, unknown>[]>([])
 
   const [createMembers, setCreateMembers] = useState<
-    Array<{ national_id: string; name: string; family_relationship: string; gender: string }>
-  >([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
+    Array<{
+      national_id: string
+      name: string
+      family_relationship: string
+      gender: string
+      date_of_birth: string
+      health_status: string
+      health_details: string
+    }>
+  >([{ national_id: '', name: '', family_relationship: 'spouse', gender: '', date_of_birth: '', health_status: '', health_details: '' }])
   const [generatedCredentials, setGeneratedCredentials] = useState<Record<number, { email: string; password: string }>>(() => {
     if (typeof window === 'undefined') {
       return {}
@@ -180,6 +209,8 @@ export function SecretaryBeneficiariesPage() {
           family_relationship: 'head',
           phone: benPhone.trim() || null,
           date_of_birth: benDob.trim() || null,
+          health_status: benHealthStatus || null,
+          health_details: benHealthDetails.trim() || null,
           notes: benNotes.trim() || null,
         },
         members: createMembers
@@ -189,6 +220,9 @@ export function SecretaryBeneficiariesPage() {
             name: member.name.trim(),
             family_relationship: member.family_relationship,
             gender: member.gender || null,
+            date_of_birth: member.date_of_birth || null,
+            health_status: member.health_status || null,
+            health_details: member.health_details.trim() || null,
           })),
       })
       const credentials = response.credentials
@@ -201,7 +235,9 @@ export function SecretaryBeneficiariesPage() {
       }
       setShowCreateDialog(false)
       setNationalId('')
-      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
+      setCreateMembers([
+        { national_id: '', name: '', family_relationship: 'spouse', gender: '', date_of_birth: '', health_status: '', health_details: '' },
+      ])
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
@@ -231,6 +267,9 @@ export function SecretaryBeneficiariesPage() {
       if (editDob.trim()) {
         payload.date_of_birth = editDob.trim()
       }
+
+      payload.health_status = editHealthStatus || null
+      payload.health_details = editHealthDetails.trim() || null
 
       await api.updateBeneficiary(Number(editId), payload)
       setMsg('تم تحديث بيانات المستفيد.')
@@ -360,6 +399,33 @@ export function SecretaryBeneficiariesPage() {
     }
   }
 
+  async function onAddMemberToExistingFamily(e: FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    setErr(null)
+
+    try {
+      await api.addFamilyMember(Number(memberFamilyId), {
+        national_id: memberNationalId.trim() || `NID-M-${Date.now()}`,
+        name: memberName.trim(),
+        family_relationship: memberRelationship,
+        gender: memberGender || null,
+        date_of_birth: memberDob || null,
+        health_status: memberHealthStatus || null,
+        health_details: memberHealthDetails.trim() || null,
+      })
+      setMsg('تمت إضافة فرد العائلة بنجاح.')
+      setMemberName('')
+      setMemberNationalId('')
+      setMemberDob('')
+      setMemberHealthStatus('')
+      setMemberHealthDetails('')
+      await load()
+    } catch (ex) {
+      setErr(extractErrorMessage(ex as Error, 'فشلت إضافة فرد العائلة'))
+    }
+  }
+
   async function onQr(e: FormEvent) {
     e.preventDefault()
     setMsg(null)
@@ -401,6 +467,8 @@ export function SecretaryBeneficiariesPage() {
     setEditNationalId(String(row.national_id ?? ''))
     setEditPhone(String(row.phone ?? ''))
     setEditDob(String(row.date_of_birth ?? ''))
+    setEditHealthStatus(String((row as { health_status?: string }).health_status ?? ''))
+    setEditHealthDetails(String((row as { health_details?: string }).health_details ?? ''))
     setFamProfileId(String(family?.id ?? ''))
     setShowEditDialog(true)
   }
@@ -647,6 +715,86 @@ export function SecretaryBeneficiariesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-base font-semibold text-white">إضافة فرد (مولود جديد / حالة صحية) لعائلة موجودة</h2>
+        <p className="mt-1 text-xs text-white/52">
+          استخدم هذا النموذج لتسجيل مولود جديد أو أي فرد إضافي في عائلة مسجّلة مسبقاً، مع تحديد حالته الصحية لدعم التصنيف عند التوزيع.
+        </p>
+        <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={onAddMemberToExistingFamily}>
+          <select
+            required
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white sm:col-span-2"
+            value={memberFamilyId}
+            onChange={(e) => setMemberFamilyId(e.target.value)}
+          >
+            <option value="">اختر العائلة</option>
+            {familyOptions.map((family) => (
+              <option key={family.id} value={String(family.id)}>
+                {family.label}
+              </option>
+            ))}
+          </select>
+          <input
+            required
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+            placeholder="اسم الفرد *"
+            value={memberName}
+            onChange={(e) => setMemberName(e.target.value)}
+          />
+          <input
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+            placeholder="الرقم الوطني (اختياري للمواليد)"
+            value={memberNationalId}
+            onChange={(e) => setMemberNationalId(e.target.value)}
+          />
+          <select
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+            value={memberRelationship}
+            onChange={(e) => setMemberRelationship(e.target.value)}
+          >
+            <option value="child">ابن/ابنة (مولود جديد)</option>
+            <option value="spouse">زوج/زوجة</option>
+            <option value="other">تابع آخر</option>
+          </select>
+          <select
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+            value={memberGender}
+            onChange={(e) => setMemberGender(e.target.value)}
+          >
+            <option value="">الجنس</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
+          </select>
+          <input
+            type="date"
+            title="تاريخ الميلاد"
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
+            value={memberDob}
+            onChange={(e) => setMemberDob(e.target.value)}
+          />
+          <select
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white"
+            value={memberHealthStatus}
+            onChange={(e) => setMemberHealthStatus(e.target.value)}
+          >
+            {HEALTH_STATUS_AR.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <input
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white sm:col-span-2"
+            placeholder="تفاصيل الحالة الصحية (اختياري)"
+            value={memberHealthDetails}
+            onChange={(e) => setMemberHealthDetails(e.target.value)}
+          />
+          <button type="submit" className="rounded-lg bg-emerald-700 py-2 text-white sm:col-span-2">
+            حفظ الفرد الجديد
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">رمز QR للأسرة المعتمدة</h2>
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={onQr}>
           <select
@@ -808,9 +956,27 @@ export function SecretaryBeneficiariesPage() {
               />
               <input
                 type="date"
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={benDob}
                 onChange={(e) => setBenDob(e.target.value)}
+              />
+              <select
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={benHealthStatus}
+                onChange={(e) => setBenHealthStatus(e.target.value)}
+              >
+                {HEALTH_STATUS_AR.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
+                placeholder="تفاصيل الحالة الصحية (اختياري)"
+                rows={2}
+                value={benHealthDetails}
+                onChange={(e) => setBenHealthDetails(e.target.value)}
               />
               <textarea
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
@@ -875,12 +1041,59 @@ export function SecretaryBeneficiariesPage() {
                       حذف
                     </button>
                   </div>
+                  <input
+                    type="date"
+                    title="تاريخ الميلاد (لتحديد المواليد الجدد)"
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                    value={member.date_of_birth}
+                    onChange={(e) =>
+                      setCreateMembers((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, date_of_birth: e.target.value } : item)),
+                      )
+                    }
+                  />
+                  <select
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                    value={member.health_status}
+                    onChange={(e) =>
+                      setCreateMembers((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, health_status: e.target.value } : item)),
+                      )
+                    }
+                  >
+                    {HEALTH_STATUS_AR.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
+                    placeholder="تفاصيل الحالة الصحية (اختياري)"
+                    value={member.health_details}
+                    onChange={(e) =>
+                      setCreateMembers((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, health_details: e.target.value } : item)),
+                      )
+                    }
+                  />
                 </div>
               ))}
               <button
                 type="button"
                 onClick={() =>
-                  setCreateMembers((prev) => [...prev, { national_id: '', name: '', family_relationship: 'child', gender: '' }])
+                  setCreateMembers((prev) => [
+                    ...prev,
+                    {
+                      national_id: '',
+                      name: '',
+                      family_relationship: 'child',
+                      gender: '',
+                      date_of_birth: '',
+                      health_status: '',
+                      health_details: '',
+                    },
+                  ])
                 }
                 className="rounded-lg border border-white/20 py-2 text-xs text-white sm:col-span-2"
               >
@@ -943,9 +1156,27 @@ export function SecretaryBeneficiariesPage() {
               />
               <input
                 type="date"
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={editDob}
                 onChange={(e) => setEditDob(e.target.value)}
+              />
+              <select
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={editHealthStatus}
+                onChange={(e) => setEditHealthStatus(e.target.value)}
+              >
+                {HEALTH_STATUS_AR.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
+                placeholder="تفاصيل الحالة الصحية (اختياري)"
+                rows={2}
+                value={editHealthDetails}
+                onChange={(e) => setEditHealthDetails(e.target.value)}
               />
               <button type="submit" className="rounded-lg bg-violet-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل المستفيد

@@ -282,6 +282,8 @@ export async function addFamilyMember(
     date_of_birth?: string | null
     phone?: string | null
     gender?: string | null
+    health_status?: string | null
+    health_details?: string | null
     notes?: string | null
   },
 ): Promise<unknown> {
@@ -415,6 +417,28 @@ export async function createAidDistributionPlan(payload: Record<string, unknown>
   return data
 }
 
+export type AidDistributionCandidateFamily = {
+  family_id: number
+  family_code?: string | null
+  head_name?: string | null
+  head_beneficiary_id?: number | null
+  members_count?: number | null
+  housing_status?: string | null
+  monthly_income?: number | null
+  health_priority_cases?: number
+  priority_score?: number
+}
+
+export async function previewAidDistributionCandidates(
+  filterCriteria: Record<string, unknown>,
+): Promise<{ count: number; families: AidDistributionCandidateFamily[] }> {
+  const { data } = await apiClient.post<{ count: number; families: AidDistributionCandidateFamily[] }>(
+    `${v1}/aid-distribution-plans/candidates`,
+    { filter_criteria: filterCriteria },
+  )
+  return data
+}
+
 export async function completeAidDistributionPlanCycle(planId: number): Promise<unknown> {
   const { data } = await apiClient.patch(`${v1}/aid-distribution-plans/${planId}/complete-cycle`)
   return data
@@ -435,6 +459,8 @@ export async function upsertCategoryRule(
     max_monthly_income?: number | null
     min_family_members?: number | null
     requires_medical_case: boolean
+    requires_health_condition?: boolean
+    min_newborns?: number | null
     is_active: boolean
   },
 ): Promise<unknown> {
@@ -937,11 +963,54 @@ export async function createCampaign(payload: {
   title: string
   description?: string
   goal_amount: number
-  status?: 'active' | 'paused' | 'completed'
   starts_at?: string
   ends_at?: string
+  image_url?: string
 }): Promise<{ campaign: Record<string, unknown>; message?: string }> {
   const { data } = await apiClient.post<{ campaign: Record<string, unknown>; message?: string }>(`${v1}/campaigns`, payload)
+  return data
+}
+
+export async function updateCampaign(
+  campaignId: number,
+  payload: {
+    title?: string
+    description?: string
+    goal_amount?: number
+    starts_at?: string | null
+    ends_at?: string | null
+    image_url?: string | null
+  },
+): Promise<{ campaign: Record<string, unknown>; message?: string }> {
+  const { data } = await apiClient.patch<{ campaign: Record<string, unknown>; message?: string }>(
+    `${v1}/campaigns/${campaignId}`,
+    payload,
+  )
+  return data
+}
+
+export async function publishCampaign(campaignId: number): Promise<{ campaign: Record<string, unknown>; message?: string }> {
+  const { data } = await apiClient.post<{ campaign: Record<string, unknown>; message?: string }>(
+    `${v1}/campaigns/${campaignId}/publish`,
+  )
+  return data
+}
+
+export async function closeCampaign(campaignId: number): Promise<{ campaign: Record<string, unknown>; message?: string }> {
+  const { data } = await apiClient.post<{ campaign: Record<string, unknown>; message?: string }>(
+    `${v1}/campaigns/${campaignId}/close`,
+  )
+  return data
+}
+
+export async function fetchCampaignWallet(campaignId: number): Promise<{
+  campaign: Record<string, unknown>
+  wallet: { id: number; balance: number; transactions: Record<string, unknown>[] }
+}> {
+  const { data } = await apiClient.get<{
+    campaign: Record<string, unknown>
+    wallet: { id: number; balance: number; transactions: Record<string, unknown>[] }
+  }>(`${v1}/campaigns/${campaignId}/wallet`)
   return data
 }
 

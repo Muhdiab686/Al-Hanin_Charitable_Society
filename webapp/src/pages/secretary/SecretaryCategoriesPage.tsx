@@ -44,6 +44,8 @@ export function SecretaryCategoriesPage() {
         max_monthly_income: row.max ? Number(row.max) : null,
         min_family_members: row.min ? Number(row.min) : null,
         requires_medical_case: row.req === '1' || row.req === 'true',
+        requires_health_condition: row.health === '1' || row.health === 'true',
+        min_newborns: row.newborns ? Number(row.newborns) : null,
         is_active: row.active !== '0' && row.active !== 'false',
       })
       setMsg('تم حفظ القاعدة.')
@@ -63,7 +65,8 @@ export function SecretaryCategoriesPage() {
       <div className="space-y-4">
         {categories.map((c) => {
           const id = Number(c.id)
-          const rules = (c.rules as Record<string, unknown> | undefined) ?? {}
+          const rulesList = c.rules as Record<string, unknown>[] | Record<string, unknown> | undefined
+          const rules = (Array.isArray(rulesList) ? rulesList[0] : rulesList) ?? {}
           return (
             <form
               key={id}
@@ -94,6 +97,22 @@ export function SecretaryCategoriesPage() {
                     className="mt-1 w-full rounded border border-white/15 bg-slate-950/50 px-2 py-1 text-white"
                     value={field(id, 'req', rules.requires_medical_case ? '1' : '0')}
                     onChange={(e) => setField(id, 'req', e.target.value)}
+                  />
+                </label>
+                <label className="text-white/70">
+                  requires_health_condition — يشمل الحالة الصحية (1/0)
+                  <input
+                    className="mt-1 w-full rounded border border-white/15 bg-slate-950/50 px-2 py-1 text-white"
+                    value={field(id, 'health', rules.requires_health_condition ? '1' : '0')}
+                    onChange={(e) => setField(id, 'health', e.target.value)}
+                  />
+                </label>
+                <label className="text-white/70">
+                  min_newborns — حد أدنى للمواليد الجدد
+                  <input
+                    className="mt-1 w-full rounded border border-white/15 bg-slate-950/50 px-2 py-1 text-white"
+                    value={field(id, 'newborns', String(rules.min_newborns ?? ''))}
+                    onChange={(e) => setField(id, 'newborns', e.target.value)}
                   />
                 </label>
                 <label className="text-white/70">

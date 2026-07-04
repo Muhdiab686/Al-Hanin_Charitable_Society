@@ -88,8 +88,8 @@ class FamilyEnrollmentStatusApiTest extends TestCase
 
     public function test_secretary_can_submit_draft_and_withdraw_pending_board(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('test-device')->plainTextToken;
 
         $draftFamily = Family::factory()->create([
@@ -117,8 +117,8 @@ class FamilyEnrollmentStatusApiTest extends TestCase
 
     public function test_secretary_can_resubmit_rejected_to_pending_board(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Rejected,
         ]);
@@ -152,8 +152,8 @@ class FamilyEnrollmentStatusApiTest extends TestCase
 
     public function test_cannot_change_finalized_enrollment_without_valid_transition(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Approved,
         ]);

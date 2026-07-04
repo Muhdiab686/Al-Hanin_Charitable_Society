@@ -7,6 +7,7 @@ use App\Http\Requests\CreateStripeCheckoutRequest;
 use App\Models\Campaign;
 use App\Models\Donation;
 use App\Models\FinancialTransaction;
+use App\Services\CampaignWalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -76,7 +77,7 @@ class StripeDonationController extends Controller
         ], 201);
     }
 
-    public function confirmCheckout(string $sessionId): JsonResponse
+    public function confirmCheckout(string $sessionId, CampaignWalletService $wallets): JsonResponse
     {
         $secretKey = config('services.stripe.secret');
 
@@ -111,11 +112,16 @@ class StripeDonationController extends Controller
             ]);
 
             if ($donation->campaign_id) {
-                $campaign = Campaign::query()->whereKey($donation->campaign_id)->first();
+                $campaign = Campaign::query()->whereKey($donation->campaign_id)->lockForUpdate()->first();
                 if ($campaign !== null) {
-                    $campaign->increment('raised_amount', (float) $donation->cash_amount);
-                    $campaign->refresh();
-                    $campaign->autoCompleteIfEligible();
+                    $wallets->credit(
+                        $campaign,
+                        (float) $donation->cash_amount,
+                        'donation_stripe',
+                        $donation,
+                        $donation->registered_by,
+                        'تبرع إلكتروني — '.$donation->receipt_code,
+                    );
                 }
             }
         }

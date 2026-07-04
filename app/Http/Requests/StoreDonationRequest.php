@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\DonationType;
 use App\Enums\InventorySpoilageCategory;
+use App\Models\Campaign;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -64,6 +65,13 @@ class StoreDonationRequest extends FormRequest
                 }
                 if ($user !== null && ! $user->can('inventory.manage')) {
                     $validator->errors()->add('type', __('You are not allowed to register in-kind donations.'));
+                }
+            }
+
+            if ($this->filled('campaign_id')) {
+                $campaign = Campaign::query()->find($this->input('campaign_id'));
+                if ($campaign !== null && ! $campaign->isOpenForDonations()) {
+                    $validator->errors()->add('campaign_id', __('This campaign is not open for donations.'));
                 }
             }
         });

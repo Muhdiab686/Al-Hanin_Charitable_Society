@@ -234,6 +234,53 @@ class AidDistributionPlanApiTest extends TestCase
             ->assertJsonPath('plan.status', 'completed');
     }
 
+    public function test_secretary_can_preview_candidate_families_without_creating_plan(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+
+        $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
+        Beneficiary::factory()->create(['family_id' => $family->id, 'is_head_of_family' => true]);
+
+        $response = $this->postJson('/api/v1/aid-distribution-plans/candidates', [
+            'filter_criteria' => [],
+        ], [
+            'Authorization' => 'Bearer '.$secretary->createToken('preview')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('families.0.family_id', $family->id);
+
+        $this->assertDatabaseCount('aid_distribution_plans', 0);
+    }
+
+    public function test_secretary_can_create_plan_with_manually_selected_families_only(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+
+        $familyA = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
+        $familyB = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
+        Beneficiary::factory()->create(['family_id' => $familyA->id, 'is_head_of_family' => true]);
+        Beneficiary::factory()->create(['family_id' => $familyB->id, 'is_head_of_family' => true]);
+
+        $response = $this->postJson('/api/v1/aid-distribution-plans', [
+            'title' => 'Hand-picked plan',
+            'aid_type' => 'special_item',
+            'distribution_date' => now()->toDateString(),
+            'total_units' => 10,
+            'selected_family_ids' => [$familyA->id],
+        ], [
+            'Authorization' => 'Bearer '.$secretary->createToken('manual-select')->plainTextToken,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('plan.eligible_families_count', 1)
+            ->assertJsonCount(1, 'plan.lines')
+            ->assertJsonPath('plan.lines.0.family_id', $familyA->id);
+    }
+
     public function test_recording_secretary_can_link_distribution_plan_to_campaign(): void
     {
         $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);

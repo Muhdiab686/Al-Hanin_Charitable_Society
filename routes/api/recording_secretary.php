@@ -37,6 +37,8 @@ Route::prefix('v1/recording-secretary')->middleware(['auth:sanctum', 'role:recor
 
     Route::get('/aid-distribution-plans', [AidDistributionPlanController::class, 'index'])
         ->middleware('permission:aid.distribute|aid.request.review');
+    Route::post('/aid-distribution-plans/candidates', [AidDistributionPlanController::class, 'candidates'])
+        ->middleware('permission:aid.distribute|aid.request.review');
     Route::post('/aid-distribution-plans', [AidDistributionPlanController::class, 'store'])
         ->middleware('permission:aid.distribute|aid.request.review');
 

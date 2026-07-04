@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import type { AidDistributionCandidateFamily } from '../../api/services'
 import { labelAidTypeAr, labelPlanStatusAr } from '../../lib/operationalLabels'
 
 export function SecretaryAidPlansPage() {
@@ -22,6 +23,10 @@ export function SecretaryAidPlansPage() {
   const [housingStatuses, setHousingStatuses] = useState('')
   const [healthPriorityOnly, setHealthPriorityOnly] = useState(false)
   const [campaignId, setCampaignId] = useState('')
+
+  const [candidates, setCandidates] = useState<AidDistributionCandidateFamily[] | null>(null)
+  const [candidatesLoading, setCandidatesLoading] = useState(false)
+  const [selectedFamilyIds, setSelectedFamilyIds] = useState<Set<number>>(new Set())
 
   const load = useCallback(async () => {
     setErr(null)
@@ -46,10 +51,73 @@ export function SecretaryAidPlansPage() {
     void load()
   }, [load])
 
+  function buildFilterCriteria(): Record<string, unknown> {
+    return {
+      ...(minChildrenUnder18 ? { min_children_under_18: Number(minChildrenUnder18) } : {}),
+      ...(minAdults ? { min_adults: Number(minAdults) } : {}),
+      ...(housingStatuses.trim()
+        ? { housing_statuses: housingStatuses.split(',').map((value) => value.trim()).filter(Boolean) }
+        : {}),
+      ...(healthPriorityOnly ? { health_priority_only: true } : {}),
+    }
+  }
+
+  async function onPreviewCandidates() {
+    setMsg(null)
+    setErr(null)
+    setCandidatesLoading(true)
+    try {
+      const response = await api.previewAidDistributionCandidates(buildFilterCriteria())
+      setCandidates(response.families)
+      setSelectedFamilyIds(new Set())
+      if (response.families.length === 0) {
+        setErr('لا توجد عائلات مطابقة لمعايير الفلترة الحالية.')
+      }
+    } catch (ex) {
+      setErr(extractErrorMessage(ex, 'تعذّرت معاينة المستفيدين'))
+    } finally {
+      setCandidatesLoading(false)
+    }
+  }
+
+  function toggleFamilySelection(familyId: number) {
+    setSelectedFamilyIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(familyId)) {
+        next.delete(familyId)
+      } else {
+        next.add(familyId)
+      }
+      return next
+    })
+  }
+
+  function selectAllCandidates() {
+    if (!candidates) {
+      return
+    }
+    setSelectedFamilyIds(new Set(candidates.map((c) => c.family_id)))
+  }
+
+  function clearSelection() {
+    setSelectedFamilyIds(new Set())
+  }
+
+  function resetCandidates() {
+    setCandidates(null)
+    setSelectedFamilyIds(new Set())
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault()
     setMsg(null)
     setErr(null)
+
+    if (candidates !== null && selectedFamilyIds.size === 0) {
+      setErr('يرجى تحديد مستفيد واحد على الأقل من قائمة المرشّحين بعد المعاينة.')
+      return
+    }
+
     const body = {
       title,
       aid_type: aidType,
@@ -57,14 +125,8 @@ export function SecretaryAidPlansPage() {
       distribution_frequency: frequency,
       notes: 'من الويب',
       ...(campaignId ? { campaign_id: Number(campaignId) } : {}),
-      filter_criteria: {
-        ...(minChildrenUnder18 ? { min_children_under_18: Number(minChildrenUnder18) } : {}),
-        ...(minAdults ? { min_adults: Number(minAdults) } : {}),
-        ...(housingStatuses.trim()
-          ? { housing_statuses: housingStatuses.split(',').map((value) => value.trim()).filter(Boolean) }
-          : {}),
-        ...(healthPriorityOnly ? { health_priority_only: true } : {}),
-      },
+      filter_criteria: buildFilterCriteria(),
+      ...(selectedFamilyIds.size > 0 ? { selected_family_ids: Array.from(selectedFamilyIds) } : {}),
       ...(aidType === 'urgent_financial'
         ? { total_amount: Number(amount || '500') }
         : { total_units: Number(units) }),
@@ -72,6 +134,7 @@ export function SecretaryAidPlansPage() {
     try {
       await api.createAidDistributionPlan(body)
       setMsg('تم إنشاء الخطة.')
+      resetCandidates()
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex, 'فشل الإنشاء'))
@@ -337,8 +400,74 @@ export function SecretaryAidPlansPage() {
             <input type="checkbox" checked={healthPriorityOnly} onChange={(e) => setHealthPriorityOnly(e.target.checked)} />
             إعطاء أولوية للحالات الصحية الحرجة فقط
           </label>
+
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={candidatesLoading}
+              onClick={() => void onPreviewCandidates()}
+              className="rounded-lg border border-violet-400/40 bg-violet-600/20 px-3 py-2 text-xs font-semibold text-violet-100 disabled:opacity-50"
+            >
+              {candidatesLoading ? 'جاري المعاينة...' : 'معاينة المستفيدين المطابقين'}
+            </button>
+            {candidates !== null ? (
+              <button
+                type="button"
+                onClick={resetCandidates}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/70"
+              >
+                إلغاء المعاينة والعودة للاختيار التلقائي
+              </button>
+            ) : null}
+          </div>
+
+          {candidates !== null ? (
+            <div className="sm:col-span-2 rounded-xl border border-violet-400/25 bg-violet-950/15 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-white/75">
+                  {candidates.length} عائلة مطابقة — تم تحديد {selectedFamilyIds.size}
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={selectAllCandidates} className="rounded-md border border-white/20 px-2 py-1 text-[11px] text-white/80">
+                    تحديد الكل
+                  </button>
+                  <button type="button" onClick={clearSelection} className="rounded-md border border-white/20 px-2 py-1 text-[11px] text-white/80">
+                    إلغاء التحديد
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
+                {candidates.length === 0 ? (
+                  <p className="text-xs text-white/50">لا توجد عائلات مطابقة لمعايير الفلترة.</p>
+                ) : (
+                  candidates.map((c) => (
+                    <label
+                      key={c.family_id}
+                      className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/85"
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedFamilyIds.has(c.family_id)}
+                          onChange={() => toggleFamilySelection(c.family_id)}
+                        />
+                        <span>
+                          {c.head_name ?? `عائلة #${c.family_id}`}
+                          {c.family_code ? <span className="text-white/40"> ({c.family_code})</span> : null}
+                        </span>
+                      </span>
+                      <span className="text-[11px] text-white/50">
+                        أفراد: {c.members_count ?? '—'} · حالات صحية: {c.health_priority_cases ?? 0} · أولوية: {c.priority_score ?? 0}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+
           <button type="submit" className="rounded-lg bg-violet-600 py-2.5 font-medium text-white sm:col-span-2">
-            إنشاء الخطة
+            {candidates !== null ? `إنشاء الخطة للمستفيدين المحددين (${selectedFamilyIds.size})` : 'إنشاء الخطة (اختيار تلقائي لكل المؤهلين)'}
           </button>
         </form>
       </section>

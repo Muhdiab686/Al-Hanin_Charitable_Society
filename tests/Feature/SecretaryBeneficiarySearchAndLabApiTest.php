@@ -29,6 +29,41 @@ class SecretaryBeneficiarySearchAndLabApiTest extends TestCase
         return ['Authorization' => 'Bearer '.$user->createToken('s')->plainTextToken];
     }
 
+    private function recordingSecretaryHeaders(User $user): array
+    {
+        $user->syncRoles([UserRole::RecordingSecretary->value]);
+
+        return ['Authorization' => 'Bearer '.$user->createToken('rs')->plainTextToken];
+    }
+
+    public function test_recording_secretary_sees_beneficiaries_created_via_admin_program_endpoint(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin->value]);
+        $admin->syncRoles([UserRole::Admin->value]);
+        $adminHeaders = ['Authorization' => 'Bearer '.$admin->createToken('a')->plainTextToken];
+
+        $storeResponse = $this->postJson('/api/v1/beneficiaries', [
+            'family' => [
+                'head_name' => 'أسرة أضافها الأدمن',
+                'members_count' => 1,
+            ],
+            'beneficiary' => [
+                'national_id' => 'NID-ADMIN-CREATED-001',
+                'name' => 'مستفيد أضافه الأدمن',
+            ],
+        ], $adminHeaders);
+
+        $storeResponse->assertCreated();
+
+        $rs = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+
+        $response = $this->getJson('/api/v1/beneficiaries', $this->recordingSecretaryHeaders($rs));
+
+        $response->assertOk();
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertContains('مستفيد أضافه الأدمن', $names);
+    }
+
     public function test_beneficiary_index_search_matches_name_national_id_or_family_code(): void
     {
         $sec = User::factory()->create(['role' => UserRole::Secretary->value]);

@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PreviewAidDistributionPlanRequest;
 use App\Http\Requests\StoreAidDistributionPlanRequest;
 use App\Models\AidDistributionPlan;
 use App\Models\AidDistributionPlanLine;
 use App\Models\Family;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,6 +40,22 @@ class AidDistributionPlanController extends Controller
         return response()->json($plans);
     }
 
+    /**
+     * Preview families that match the given filter criteria without creating a plan,
+     * so the secretary can review and hand-pick which beneficiaries to include.
+     */
+    public function candidates(PreviewAidDistributionPlanRequest $request): JsonResponse
+    {
+        $filterCriteria = $request->validated('filter_criteria', []) ?? [];
+
+        $eligibleFamilies = $this->eligibleFamilies($filterCriteria);
+
+        return response()->json([
+            'count' => $eligibleFamilies->count(),
+            'families' => $eligibleFamilies->map(fn (Family $family): array => $this->serializeCandidateFamily($family))->values(),
+        ]);
+    }
+
     public function store(StoreAidDistributionPlanRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -46,15 +64,16 @@ class AidDistributionPlanController extends Controller
         $distributionFrequency = (string) ($validated['distribution_frequency'] ?? 'once');
         $cyclesPerYear = $this->cyclesPerYear($distributionFrequency);
 
-        $eligibleFamilies = Family::query()
-            ->where('enrollment_status', FamilyEnrollmentStatus::Approved->value)
-            ->where('has_direct_income', false)
-            ->whereNull('aid_paused_at')
-            ->with(['beneficiaries' => fn ($query) => $query->orderByDesc('is_head_of_family')->orderBy('id')])
-            ->get()
-            ->filter(fn (Family $family): bool => $this->matchesFilterCriteria($family, $filterCriteria))
-            ->sortByDesc(fn (Family $family): int => $this->priorityScore($family))
-            ->values();
+        $eligibleFamilies = $this->eligibleFamilies($filterCriteria);
+
+        $selectedFamilyIds = $validated['selected_family_ids'] ?? null;
+        if ($selectedFamilyIds !== null && $selectedFamilyIds !== []) {
+            $selectedIds = array_map('intval', $selectedFamilyIds);
+            $eligibleFamilies = $eligibleFamilies
+                ->filter(fn (Family $family): bool => in_array($family->id, $selectedIds, true))
+                ->sortBy(fn (Family $family): int => array_search($family->id, $selectedIds, true))
+                ->values();
+        }
 
         if ($eligibleFamilies->isEmpty()) {
             throw ValidationException::withMessages([
@@ -125,6 +144,48 @@ class AidDistributionPlanController extends Controller
             'message' => __('Plan cycle marked as completed.'),
             'plan' => $aidDistributionPlan->fresh()->load('creator:id,name,email'),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filterCriteria
+     * @return Collection<int, Family>
+     */
+    private function eligibleFamilies(array $filterCriteria): Collection
+    {
+        return Family::query()
+            ->where('enrollment_status', FamilyEnrollmentStatus::Approved->value)
+            ->where('has_direct_income', false)
+            ->whereNull('aid_paused_at')
+            ->with(['beneficiaries' => fn ($query) => $query->orderByDesc('is_head_of_family')->orderBy('id')])
+            ->get()
+            ->filter(fn (Family $family): bool => $this->matchesFilterCriteria($family, $filterCriteria))
+            ->sortByDesc(fn (Family $family): int => $this->priorityScore($family))
+            ->values();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeCandidateFamily(Family $family): array
+    {
+        $head = $family->beneficiaries->firstWhere('is_head_of_family', true) ?? $family->beneficiaries->first();
+        $healthCases = $family->beneficiaries->filter(function ($member): bool {
+            $status = strtolower(trim((string) ($member->health_status ?? '')));
+
+            return $status !== '' && ! in_array($status, ['good', 'stable', 'healthy'], true);
+        })->count();
+
+        return [
+            'family_id' => $family->id,
+            'family_code' => $family->family_code,
+            'head_name' => $family->head_name ?? $head?->name,
+            'head_beneficiary_id' => $head?->id,
+            'members_count' => $family->members_count,
+            'housing_status' => $family->housing_status,
+            'monthly_income' => $family->monthly_income,
+            'health_priority_cases' => $healthCases,
+            'priority_score' => $this->priorityScore($family),
+        ];
     }
 
     /**

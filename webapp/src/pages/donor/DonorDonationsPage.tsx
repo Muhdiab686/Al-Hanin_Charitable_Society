@@ -308,7 +308,8 @@ export function DonorDonationsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-[11px] text-white/50">
-                  كود الحملة: CMP-{String(c.id)} {c.ends_at ? `• إغلاق: ${String(c.ends_at)}` : ''}
+                  كود الحملة: <span className="font-mono text-white/75">{String(c.campaign_code ?? '—')}</span>{' '}
+                  {c.ends_at ? `• إغلاق: ${String(c.ends_at)}` : ''}
                 </p>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
                   <div
@@ -531,25 +532,40 @@ export function DonorDonationsPage() {
 
       {showReceiptDialog && selectedDonation ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/20 bg-slate-950 p-5">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="print-receipt w-full max-w-lg rounded-2xl border border-white/20 bg-slate-950 p-5">
+            <div className="print-hide mb-4 flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">إيصال تبرع رسمي</h3>
-              <button type="button" onClick={() => setShowReceiptDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white">
-                إغلاق
-              </button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => window.print()} className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
+                  طباعة الإيصال
+                </button>
+                <button type="button" onClick={() => setShowReceiptDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs text-white">
+                  إغلاق
+                </button>
+              </div>
             </div>
-            <div className="space-y-2 text-sm text-white/80">
+            <div className="space-y-2 text-sm text-white/80 print:text-slate-900">
+              <p className="hidden text-center text-lg font-bold print:block">جمعية حنين — إيصال استلام تبرع</p>
               <p>
-                رقم الإيصال: <span className="font-mono text-rose-100">{String(selectedDonation.receipt_code ?? '—')}</span>
+                رقم الإيصال: <span className="font-mono text-rose-100 print:text-rose-700">{String(selectedDonation.receipt_code ?? '—')}</span>
               </p>
               <p>النوع: {String(selectedDonation.type ?? '—')}</p>
               <p>المبلغ: {String(selectedDonation.cash_amount ?? '—')}</p>
               <p>الغرض: {String(selectedDonation.purpose ?? 'تبرع عام')}</p>
+              {selectedDonation.campaign ? (
+                <p>
+                  كود الحملة:{' '}
+                  <span className="font-mono text-fuchsia-100 print:text-fuchsia-700">
+                    {String((selectedDonation.campaign as Record<string, unknown>)?.campaign_code ?? '—')}
+                  </span>{' '}
+                  ({String((selectedDonation.campaign as Record<string, unknown>)?.title ?? '')})
+                </p>
+              ) : null}
               <p>التكرار: {String(selectedDonation.pledge_frequency ?? 'مرة واحدة')}</p>
               <p>التاريخ: {String(selectedDonation.created_at ?? '—')}</p>
               {receiptQr ? (
                 <div className="pt-2">
-                  <p className="mb-2 text-xs text-white/60">QR إيصال التبرع</p>
+                  <p className="mb-2 text-xs text-white/60 print:text-slate-600">QR إيصال التبرع</p>
                   <img src={receiptQr} alt="Donation receipt QR" className="h-40 w-40 rounded-lg border border-white/20 bg-white p-1" />
                 </div>
               ) : null}

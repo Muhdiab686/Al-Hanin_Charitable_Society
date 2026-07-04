@@ -182,6 +182,8 @@ class FamilyController extends Controller
             'date_of_birth' => $validated['date_of_birth'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'gender' => $validated['gender'] ?? null,
+            'health_status' => $validated['health_status'] ?? null,
+            'health_details' => $validated['health_details'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'is_head_of_family' => $relationship === FamilyRelationship::Head,
             'family_relationship' => $relationship->value,

@@ -20,7 +20,6 @@ class StoreCampaignRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'goal_amount' => ['required', 'numeric', 'min:1'],
-            'status' => ['nullable', 'string', 'in:active,paused,completed'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'image_url' => ['nullable', 'url', 'max:500'],

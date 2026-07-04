@@ -15,6 +15,8 @@ class CategoryRule extends Model
         'max_monthly_income',
         'min_family_members',
         'requires_medical_case',
+        'requires_health_condition',
+        'min_newborns',
         'is_active',
     ];
 
@@ -26,6 +28,7 @@ class CategoryRule extends Model
         return [
             'max_monthly_income' => 'decimal:2',
             'requires_medical_case' => 'boolean',
+            'requires_health_condition' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

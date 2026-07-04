@@ -25,8 +25,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_beneficiary_is_auto_classified_on_create(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $response = $this->postJson('/api/v1/beneficiaries', [
             'family' => [
@@ -50,8 +50,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_updating_family_profile_recalculates_category(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
 
         $family = Family::factory()->create([
@@ -79,8 +79,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_can_update_category_rule_and_recalculate_specific_beneficiary(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
 
         $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
@@ -110,6 +110,77 @@ class BeneficiaryCategorizationApiTest extends TestCase
             'created_by' => User::factory()->create()->id,
             'type' => 'medical_prescription',
             'status' => 'approved',
+        ]);
+
+        $this->postJson('/api/v1/beneficiaries/'.$beneficiary->id.'/recalculate-category', [], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk()
+            ->assertJsonPath('beneficiary.category.name', 'health');
+    }
+
+    public function test_beneficiary_with_chronic_illness_is_classified_when_rule_requires_health_condition(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $secretary->createToken('s')->plainTextToken;
+
+        $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
+
+        $this->putJson('/api/v1/categories/'.$healthCategory->id.'/rule', [
+            'max_monthly_income' => null,
+            'min_family_members' => null,
+            'requires_medical_case' => false,
+            'requires_health_condition' => true,
+            'is_active' => true,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk();
+
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'monthly_income' => 400,
+            'members_count' => 2,
+        ]);
+        $beneficiary = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'medical_wallet_balance' => 0,
+            'category_id' => null,
+            'health_status' => 'chronic_illness',
+        ]);
+
+        $this->postJson('/api/v1/beneficiaries/'.$beneficiary->id.'/recalculate-category', [], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk()
+            ->assertJsonPath('beneficiary.category.name', 'health');
+    }
+
+    public function test_family_with_newborn_is_classified_when_rule_requires_min_newborns(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $secretary->createToken('s')->plainTextToken;
+
+        $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
+
+        $this->putJson('/api/v1/categories/'.$healthCategory->id.'/rule', [
+            'max_monthly_income' => null,
+            'min_family_members' => null,
+            'requires_medical_case' => false,
+            'min_newborns' => 1,
+            'is_active' => true,
+        ], [
+            'Authorization' => 'Bearer '.$token,
+        ])->assertOk();
+
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'monthly_income' => 400,
+            'members_count' => 2,
+        ]);
+        $beneficiary = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'category_id' => null,
+            'date_of_birth' => now()->subMonths(3),
         ]);
 
         $this->postJson('/api/v1/beneficiaries/'.$beneficiary->id.'/recalculate-category', [], [

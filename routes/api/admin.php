@@ -27,6 +27,10 @@ Route::prefix('v1/admin')->middleware(['auth:sanctum', 'permission:users.manage'
     Route::get('/campaigns', [CampaignController::class, 'index']);
     Route::post('/campaigns', [CampaignController::class, 'store']);
     Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
+    Route::patch('/campaigns/{campaign}', [CampaignController::class, 'update']);
+    Route::post('/campaigns/{campaign}/publish', [CampaignController::class, 'publish']);
+    Route::post('/campaigns/{campaign}/close', [CampaignController::class, 'close']);
+    Route::get('/campaigns/{campaign}/wallet', [CampaignController::class, 'wallet']);
 
     Route::get('/reporting/campaigns', [CampaignReportingController::class, 'index'])
         ->middleware('permission:finance.reports.view');

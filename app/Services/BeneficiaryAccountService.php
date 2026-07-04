@@ -31,7 +31,7 @@ class BeneficiaryAccountService
 
         return DB::transaction(function () use ($user): Beneficiary {
             $family = Family::query()->create([
-                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.fake()->numerify('####'),
+                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT),
                 'registration_number' => $this->generateRegistrationNumber(),
                 'registration_date' => now()->toDateString(),
                 'head_name' => $user->name,
@@ -73,7 +73,7 @@ class BeneficiaryAccountService
             $user->syncRoles([UserRole::Beneficiary->value]);
 
             $family = Family::query()->create([
-                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.fake()->numerify('####'),
+                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT),
                 'registration_number' => $this->generateRegistrationNumber(),
                 'registration_date' => now()->toDateString(),
                 'head_name' => $familyData['head_name'],

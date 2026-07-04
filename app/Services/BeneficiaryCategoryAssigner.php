@@ -2,12 +2,18 @@
 
 namespace App\Services;
 
+use App\Enums\HealthStatus;
 use App\Models\Beneficiary;
 use App\Models\Category;
 use App\Models\CategoryRule;
+use App\Models\Family;
+use Carbon\Carbon;
 
 class BeneficiaryCategoryAssigner
 {
+    /** A family member younger than this many months is considered a newborn (المواليد). */
+    private const NEWBORN_MAX_AGE_MONTHS = 12;
+
     public function assign(Beneficiary $beneficiary): ?int
     {
         $beneficiary->loadMissing('family');
@@ -54,6 +60,14 @@ class BeneficiaryCategoryAssigner
             return false;
         }
 
+        if ($rule->requires_health_condition && ! $this->hasHealthCondition($beneficiary)) {
+            return false;
+        }
+
+        if ($rule->min_newborns !== null && $this->countNewborns($family) < (int) $rule->min_newborns) {
+            return false;
+        }
+
         return true;
     }
 
@@ -62,5 +76,33 @@ class BeneficiaryCategoryAssigner
         return $beneficiary->aidRequests()
             ->where('type', 'medical_prescription')
             ->exists() || (float) $beneficiary->medical_wallet_balance > 0;
+    }
+
+    private function hasHealthCondition(Beneficiary $beneficiary): bool
+    {
+        if ($beneficiary->health_status === null || $beneficiary->health_status === '') {
+            return false;
+        }
+
+        $status = $beneficiary->health_status instanceof HealthStatus
+            ? $beneficiary->health_status
+            : HealthStatus::tryFrom((string) $beneficiary->health_status);
+
+        return $status !== null && $status !== HealthStatus::Healthy;
+    }
+
+    private function countNewborns(Family $family): int
+    {
+        return $family->beneficiaries->filter(function (Beneficiary $member): bool {
+            if ($member->date_of_birth === null) {
+                return false;
+            }
+
+            try {
+                return Carbon::parse($member->date_of_birth)->diffInMonths(now()) < self::NEWBORN_MAX_AGE_MONTHS;
+            } catch (\Throwable) {
+                return false;
+            }
+        })->count();
     }
 }

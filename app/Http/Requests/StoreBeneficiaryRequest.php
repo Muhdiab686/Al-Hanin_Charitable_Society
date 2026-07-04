@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\FamilyRelationship;
+use App\Enums\HealthStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -46,6 +47,8 @@ class StoreBeneficiaryRequest extends FormRequest
             'beneficiary.family_relationship' => ['nullable', 'string', Rule::enum(FamilyRelationship::class)],
             'beneficiary.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
             'beneficiary.category_id' => ['nullable', 'exists:categories,id'],
+            'beneficiary.health_status' => ['nullable', Rule::enum(HealthStatus::class)],
+            'beneficiary.health_details' => ['nullable', 'string', 'max:2000'],
 
             'members' => ['nullable', 'array'],
             'members.*.national_id' => ['required_with:members', 'string', 'max:100', 'unique:beneficiaries,national_id'],
@@ -54,6 +57,8 @@ class StoreBeneficiaryRequest extends FormRequest
             'members.*.date_of_birth' => ['nullable', 'date'],
             'members.*.phone' => ['nullable', 'string', 'max:50'],
             'members.*.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
+            'members.*.health_status' => ['nullable', Rule::enum(HealthStatus::class)],
+            'members.*.health_details' => ['nullable', 'string', 'max:2000'],
             'members.*.notes' => ['nullable', 'string'],
             'members.*.category_id' => ['nullable', 'exists:categories,id'],
         ];

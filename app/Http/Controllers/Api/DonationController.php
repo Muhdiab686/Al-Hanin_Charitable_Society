@@ -11,6 +11,7 @@ use App\Models\Donation;
 use App\Models\FinancialTransaction;
 use App\Models\InventoryItem;
 use App\Services\AppNotificationService;
+use App\Services\CampaignWalletService;
 use App\Services\DonationReceiptQrCodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class DonationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Donation::query()->with(['registrar:id,name,email'])
+        $query = Donation::query()->with(['registrar:id,name,email', 'campaign:id,title,campaign_code'])
             ->withCount('inventoryItems')
             ->latest();
 
@@ -31,11 +32,11 @@ class DonationController extends Controller
         return response()->json($query->paginate(15));
     }
 
-    public function store(StoreDonationRequest $request, AppNotificationService $notifier): JsonResponse
+    public function store(StoreDonationRequest $request, AppNotificationService $notifier, CampaignWalletService $wallets): JsonResponse
     {
         $validated = $request->validated();
 
-        $donation = DB::transaction(function () use ($request, $validated): Donation {
+        $donation = DB::transaction(function () use ($request, $validated, $wallets): Donation {
             $receiptCode = $this->uniqueReceiptCode();
             $cashAmount = ($validated['type'] === DonationType::Cash->value)
                 ? $validated['cash_amount']
@@ -86,11 +87,16 @@ class DonationController extends Controller
                 ]);
 
                 if (isset($validated['campaign_id'])) {
-                    $campaign = Campaign::query()->whereKey($validated['campaign_id'])->first();
+                    $campaign = Campaign::query()->whereKey($validated['campaign_id'])->lockForUpdate()->first();
                     if ($campaign !== null) {
-                        $campaign->increment('raised_amount', (float) $validated['cash_amount']);
-                        $campaign->refresh();
-                        $campaign->autoCompleteIfEligible();
+                        $wallets->credit(
+                            $campaign,
+                            (float) $validated['cash_amount'],
+                            'donation_cash',
+                            $donation,
+                            $request->user()->id,
+                            'تبرع نقدي — '.$donation->receipt_code,
+                        );
                     }
                 }
             }
@@ -112,7 +118,7 @@ class DonationController extends Controller
 
         return response()->json([
             'message' => __('Donation recorded successfully.'),
-            'donation' => $donation->fresh()->load(['inventoryItems', 'registrar:id,name,email']),
+            'donation' => $donation->fresh()->load(['inventoryItems', 'registrar:id,name,email', 'campaign:id,title,campaign_code']),
         ], 201);
     }
 
@@ -120,7 +126,7 @@ class DonationController extends Controller
     {
         $this->authorizeDonationView($request, $donation);
 
-        return response()->json($donation->load(['inventoryItems', 'registrar:id,name,email']));
+        return response()->json($donation->load(['inventoryItems', 'registrar:id,name,email', 'campaign:id,title,campaign_code']));
     }
 
     public function receiptQr(

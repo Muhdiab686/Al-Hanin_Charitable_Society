@@ -70,7 +70,7 @@ class BeneficiaryController extends Controller
                 : FamilyEnrollmentStatus::PendingBoard;
 
             $family = Family::query()->create([
-                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.fake()->numerify('####'),
+                'family_code' => 'FAM-'.now()->format('YmdHis').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT),
                 'head_name' => $validated['family']['head_name'],
                 'phone' => $validated['family']['phone'] ?? null,
                 'address' => $validated['family']['address'] ?? null,
@@ -92,6 +92,8 @@ class BeneficiaryController extends Controller
                 'date_of_birth' => $validated['beneficiary']['date_of_birth'] ?? null,
                 'phone' => $validated['beneficiary']['phone'] ?? null,
                 'gender' => $validated['beneficiary']['gender'] ?? null,
+                'health_status' => $validated['beneficiary']['health_status'] ?? null,
+                'health_details' => $validated['beneficiary']['health_details'] ?? null,
                 'notes' => $validated['beneficiary']['notes'] ?? null,
                 'is_head_of_family' => $isHead,
                 'family_relationship' => $relationship->value,
@@ -111,6 +113,8 @@ class BeneficiaryController extends Controller
                     'date_of_birth' => $memberData['date_of_birth'] ?? null,
                     'phone' => $memberData['phone'] ?? null,
                     'gender' => $memberData['gender'] ?? null,
+                    'health_status' => $memberData['health_status'] ?? null,
+                    'health_details' => $memberData['health_details'] ?? null,
                     'notes' => $memberData['notes'] ?? null,
                     'is_head_of_family' => $memberRelationship === FamilyRelationship::Head,
                     'family_relationship' => $memberRelationship->value,

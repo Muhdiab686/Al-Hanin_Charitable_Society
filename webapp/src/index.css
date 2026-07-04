@@ -29,3 +29,26 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible;
+  }
+
+  .print-receipt {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+}

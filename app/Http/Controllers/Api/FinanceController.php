@@ -7,6 +7,7 @@ use App\Http\Requests\StoreOperationalExpenseRequest;
 use App\Models\Campaign;
 use App\Models\FinancialTransaction;
 use App\Models\OperationalExpense;
+use App\Services\CampaignWalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,11 +52,11 @@ class FinanceController extends Controller
         ]);
     }
 
-    public function storeOperationalExpense(StoreOperationalExpenseRequest $request): JsonResponse
+    public function storeOperationalExpense(StoreOperationalExpenseRequest $request, CampaignWalletService $wallets): JsonResponse
     {
         $validated = $request->validated();
 
-        $transaction = DB::transaction(function () use ($request, $validated): FinancialTransaction {
+        $transaction = DB::transaction(function () use ($request, $validated, $wallets): FinancialTransaction {
             $campaign = null;
             if (isset($validated['campaign_id'])) {
                 $campaign = Campaign::query()->whereKey($validated['campaign_id'])->lockForUpdate()->firstOrFail();
@@ -68,19 +69,28 @@ class FinanceController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
+            $description = $validated['description'] ?? ('مصروف تشغيلي #'.$voucher->id);
+
             $transaction = FinancialTransaction::query()->create([
                 'type' => 'expense',
                 'source' => $campaign === null ? 'operational_invoice' : 'campaign_invoice',
                 'amount' => $validated['amount'],
                 'reference_type' => OperationalExpense::class,
                 'reference_id' => $voucher->id,
-                'description' => $validated['description'] ?? ('مصروف تشغيلي #'.$voucher->id),
+                'description' => $description,
                 'recorded_by' => $request->user()->id,
                 'recorded_at' => now(),
             ]);
 
             if ($campaign !== null) {
-                $campaign->increment('spent_amount', (float) $validated['amount']);
+                $wallets->debit(
+                    $campaign,
+                    (float) $validated['amount'],
+                    'campaign_invoice',
+                    $voucher,
+                    $request->user()->id,
+                    $description,
+                );
             }
 
             return $transaction;

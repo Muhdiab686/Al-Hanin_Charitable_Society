@@ -22,8 +22,8 @@ class FamilyMemberApiTest extends TestCase
 
     private function secretaryToken(): string
     {
-        $user = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $user->syncRoles([UserRole::Secretary->value]);
+        $user = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $user->syncRoles([UserRole::RecordingSecretary->value]);
 
         return $user->createToken('test')->plainTextToken;
     }
@@ -47,6 +47,31 @@ class FamilyMemberApiTest extends TestCase
             'family_id' => $family->id,
             'national_id' => 'SPOUSE-001',
             'family_relationship' => FamilyRelationship::Spouse->value,
+        ]);
+    }
+
+    public function test_secretary_can_add_member_with_health_status_and_newborn_date_of_birth(): void
+    {
+        $family = Family::factory()->create(['members_count' => 1]);
+        $headers = ['Authorization' => 'Bearer '.$this->secretaryToken()];
+
+        $response = $this->postJson('/api/v1/families/'.$family->id.'/members', [
+            'national_id' => 'NEWBORN-001',
+            'name' => 'مولود جديد',
+            'family_relationship' => FamilyRelationship::Child->value,
+            'date_of_birth' => now()->subMonths(2)->toDateString(),
+            'health_status' => 'chronic_illness',
+            'health_details' => 'يحتاج متابعة دورية',
+        ], $headers);
+
+        $response->assertCreated()
+            ->assertJsonPath('beneficiary.health_status', 'chronic_illness');
+
+        $this->assertDatabaseHas('beneficiaries', [
+            'family_id' => $family->id,
+            'national_id' => 'NEWBORN-001',
+            'health_status' => 'chronic_illness',
+            'health_details' => 'يحتاج متابعة دورية',
         ]);
     }
 

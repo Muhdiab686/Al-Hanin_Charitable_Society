@@ -175,5 +175,68 @@ class FinanceApiTest extends TestCase
             'raised_amount' => 200,
             'spent_amount' => 50,
         ]);
+
+        $this->assertDatabaseHas('campaign_wallet_transactions', [
+            'direction' => 'debit',
+            'source' => 'campaign_invoice',
+            'amount' => 50,
+        ]);
+    }
+
+    public function test_campaign_expense_cannot_exceed_wallet_balance(): void
+    {
+        $accountant = User::factory()->create(['role' => UserRole::Accountant->value]);
+        $accountant->syncRoles([UserRole::Accountant->value]);
+        $token = $accountant->createToken('overspend')->plainTextToken;
+
+        $campaign = Campaign::query()->create([
+            'title' => 'حملة محدودة الرصيد',
+            'goal_amount' => 1000,
+            'raised_amount' => 0,
+            'spent_amount' => 0,
+            'status' => 'active',
+            'created_by' => $accountant->id,
+        ]);
+
+        $this->postJson('/api/v1/donations', [
+            'type' => 'cash',
+            'channel' => 'web',
+            'cash_amount' => 30,
+            'campaign_id' => $campaign->id,
+            'donor_name' => 'Small donor',
+        ], ['Authorization' => 'Bearer '.$token])->assertCreated();
+
+        $this->postJson('/api/v1/finance/expenses', [
+            'amount' => 100,
+            'description' => 'محاولة صرف تتجاوز الرصيد',
+            'campaign_id' => $campaign->id,
+        ], ['Authorization' => 'Bearer '.$token])->assertUnprocessable();
+
+        $this->assertDatabaseHas('campaigns', [
+            'id' => $campaign->id,
+            'spent_amount' => 0,
+        ]);
+    }
+
+    public function test_expense_cannot_be_recorded_against_draft_campaign(): void
+    {
+        $accountant = User::factory()->create(['role' => UserRole::Accountant->value]);
+        $accountant->syncRoles([UserRole::Accountant->value]);
+        $token = $accountant->createToken('draft-expense')->plainTextToken;
+
+        $campaign = Campaign::query()->create([
+            'title' => 'حملة مسودة',
+            'goal_amount' => 500,
+            'raised_amount' => 0,
+            'spent_amount' => 0,
+            'status' => 'draft',
+            'created_by' => $accountant->id,
+        ]);
+
+        $this->postJson('/api/v1/finance/expenses', [
+            'amount' => 10,
+            'description' => 'صرف على حملة غير منشورة',
+            'campaign_id' => $campaign->id,
+        ], ['Authorization' => 'Bearer '.$token])->assertUnprocessable();
     }
 }
