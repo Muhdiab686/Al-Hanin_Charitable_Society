@@ -10,6 +10,7 @@ use App\Models\ClinicStaffProfile;
 use App\Models\DoctorPayoutRequest;
 use App\Models\FinancialTransaction;
 use App\Services\AppNotificationService;
+use App\Services\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -112,7 +113,8 @@ class DoctorPayoutController extends Controller
     public function review(
         ReviewDoctorPayoutRequest $request,
         DoctorPayoutRequest $doctorPayoutRequest,
-        AppNotificationService $notifier
+        AppNotificationService $notifier,
+        WalletLedgerService $walletLedger
     ): JsonResponse {
         if ($doctorPayoutRequest->status !== 'pending') {
             abort(422, 'Only pending payout requests can be reviewed.');
@@ -120,7 +122,7 @@ class DoctorPayoutController extends Controller
 
         $validated = $request->validated();
 
-        DB::transaction(function () use ($request, $doctorPayoutRequest, $validated): void {
+        DB::transaction(function () use ($request, $doctorPayoutRequest, $validated, $walletLedger): void {
             $doctorPayoutRequest->forceFill([
                 'status' => $validated['decision'],
                 'reviewed_by' => $request->user()->id,
@@ -129,7 +131,7 @@ class DoctorPayoutController extends Controller
             ])->save();
 
             if ($validated['decision'] === 'approved') {
-                FinancialTransaction::query()->create([
+                $transaction = FinancialTransaction::query()->create([
                     'type' => 'expense',
                     'source' => 'doctor_payout',
                     'amount' => $doctorPayoutRequest->amount,
@@ -139,6 +141,18 @@ class DoctorPayoutController extends Controller
                     'recorded_by' => $request->user()->id,
                     'recorded_at' => now(),
                 ]);
+
+                $walletLedger->creditDoctorPayout(
+                    $doctorPayoutRequest->doctor,
+                    (float) $doctorPayoutRequest->amount,
+                    $doctorPayoutRequest,
+                    __('Doctor payout approved for period :start — :end.', [
+                        'start' => $doctorPayoutRequest->period_start?->toDateString(),
+                        'end' => $doctorPayoutRequest->period_end?->toDateString(),
+                    ]),
+                    $request->user(),
+                    $transaction,
+                );
 
                 ClinicAppointment::query()
                     ->where('doctor_payout_request_id', $doctorPayoutRequest->id)
@@ -159,9 +173,9 @@ class DoctorPayoutController extends Controller
             $doctorPayoutRequest->doctor,
             'تحديث طلب مستحقات الطبيب',
             $doctorPayoutRequest->status === 'approved'
-                ? 'تمت الموافقة على طلب مستحقاتك.'
+                ? 'تمت الموافقة على طلب مستحقاتك وإضافتها إلى محفظتك.'
                 : 'تم رفض طلب مستحقاتك.',
-            '/app/doctor/payouts',
+            '/app/doctor/wallet',
             ['doctor_payout_request_id' => $doctorPayoutRequest->id, 'status' => $doctorPayoutRequest->status]
         );
 

@@ -83,10 +83,10 @@ class BeneficiaryMedicalWalletApiTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_secretary_cannot_credit_wallet_without_medical_manage_permission(): void
+    public function test_recording_secretary_cannot_credit_wallet_without_medical_manage_permission(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $beneficiary = Beneficiary::factory()->create([
             'medical_wallet_balance' => 0,

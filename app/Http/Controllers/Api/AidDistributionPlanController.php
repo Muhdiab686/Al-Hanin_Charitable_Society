@@ -147,6 +147,15 @@ class AidDistributionPlanController extends Controller
             'status' => $nextStatus,
         ])->save();
 
+        $lines = $aidDistributionPlan->lines()->with('beneficiary')->get();
+        foreach ($lines as $line) {
+            BeneficiaryMedicalWalletController::creditDistributionPlanCycle(
+                $line,
+                $nextCompletedCycles,
+                (int) request()->user()?->id,
+            );
+        }
+
         return response()->json([
             'message' => __('Plan cycle marked as completed.'),
             'plan' => $aidDistributionPlan->fresh()->load('creator:id,name,email'),

@@ -16,9 +16,6 @@ class ApproveClinicAppointmentRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'doctor_id' => ['required', 'exists:users,id'],
-            'scheduled_at' => ['required', 'date', 'after:now'],
-        ];
+        return [];
     }
 }

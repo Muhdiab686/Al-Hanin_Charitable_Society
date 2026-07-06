@@ -41,11 +41,13 @@ import { BeneficiaryAppointmentsPage } from './pages/beneficiary/BeneficiaryAppo
 import { BeneficiaryHomePage } from './pages/beneficiary/BeneficiaryHomePage'
 import { BeneficiaryMedicalPage } from './pages/beneficiary/BeneficiaryMedicalPage'
 import { BeneficiaryProfilePage } from './pages/beneficiary/BeneficiaryProfilePage'
+import { BeneficiaryWalletPage } from './pages/beneficiary/BeneficiaryWalletPage'
 import { DoctorAppointmentsPage } from './pages/doctor/DoctorAppointmentsPage'
 import { DoctorHomePage } from './pages/doctor/DoctorHomePage'
 import { DoctorMedicalPage } from './pages/doctor/DoctorMedicalPage'
 import { DoctorPayoutPage } from './pages/doctor/DoctorPayoutPage'
 import { DoctorProfilePage } from './pages/doctor/DoctorProfilePage'
+import { DoctorWalletPage } from './pages/doctor/DoctorWalletPage'
 import { DonorDonationsPage } from './pages/donor/DonorDonationsPage'
 import { DonorChatPage } from './pages/donor/DonorChatPage'
 import { DonorHomePage } from './pages/donor/DonorHomePage'
@@ -211,6 +213,7 @@ export default function App() {
             <Route path="appointments" element={<DoctorAppointmentsPage />} />
             <Route path="medical" element={<DoctorMedicalPage />} />
             <Route path="payouts" element={<DoctorPayoutPage />} />
+            <Route path="wallet" element={<DoctorWalletPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
@@ -281,6 +284,7 @@ export default function App() {
             <Route path="aid" element={<BeneficiaryAidPage />} />
             <Route path="appointments" element={<BeneficiaryAppointmentsPage />} />
             <Route path="medical" element={<BeneficiaryMedicalPage />} />
+            <Route path="wallet" element={<BeneficiaryWalletPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 

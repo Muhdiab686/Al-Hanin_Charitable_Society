@@ -1,19 +1,10 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
-
-const WEEKDAY_OPTIONS = [
-  'Saturday',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-]
+import { MEDICAL_SPECIALTIES, WEEKDAY_OPTIONS } from '../../constants/medicalSpecialties'
 
 export function DoctorProfilePage() {
-  const [specialty, setSpecialty] = useState('')
+  const [specialty, setSpecialty] = useState<string>(MEDICAL_SPECIALTIES[0].value)
   const [bio, setBio] = useState('')
   const [consultationFee, setConsultationFee] = useState('0')
   const [availableDays, setAvailableDays] = useState<string[]>([])
@@ -30,7 +21,10 @@ export function DoctorProfilePage() {
         if (!profile) {
           return
         }
-        setSpecialty(String(profile.specialty ?? ''))
+        const profileSpecialty = String(profile.specialty ?? '')
+        if (MEDICAL_SPECIALTIES.some((opt) => opt.value === profileSpecialty)) {
+          setSpecialty(profileSpecialty)
+        }
         setBio(String(profile.bio ?? ''))
         setConsultationFee(String(profile.consultation_fee ?? '0'))
         const days = Array.isArray(profile.available_days) ? (profile.available_days as string[]) : []
@@ -49,7 +43,7 @@ export function DoctorProfilePage() {
     setErr(null)
     try {
       await api.updateDoctorClinicProfile({
-        specialty: specialty.trim(),
+        specialty,
         bio: bio.trim() || null,
         consultation_fee: Number(consultationFee),
         available_days: availableDays,
@@ -69,24 +63,35 @@ export function DoctorProfilePage() {
       )}
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-base font-semibold text-white">ملفي الطبي</h2>
-        <p className="mt-1 text-xs text-white/55">أكمل الاختصاص والسيرة الذاتية وأيام الدوام لتظهر للمستفيدين في الحجز.</p>
+        <p className="mt-1 text-xs text-white/55">اختر الاختصاص من القائمة وحدّد أيام الدوام لتظهر للمستفيدين عند الحجز.</p>
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
-          <input
-            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-            placeholder="الاختصاص"
-            value={specialty}
-            onChange={(e) => setSpecialty(e.target.value)}
-            required
-            disabled={loading}
-          />
-          <input
-            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-            placeholder="أجرة المعاينة"
-            value={consultationFee}
-            onChange={(e) => setConsultationFee(e.target.value)}
-            required
-            disabled={loading}
-          />
+          <div>
+            <label className="mb-1 block text-[11px] text-white/50">القسم / الاختصاص</label>
+            <select
+              className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              value={specialty}
+              onChange={(e) => setSpecialty(e.target.value)}
+              required
+              disabled={loading}
+            >
+              {MEDICAL_SPECIALTIES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-white/50">أجرة المعاينة</label>
+            <input
+              className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+              placeholder="أجرة المعاينة"
+              value={consultationFee}
+              onChange={(e) => setConsultationFee(e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
           <textarea
             className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
             rows={3}
@@ -99,21 +104,21 @@ export function DoctorProfilePage() {
             <span className="text-[11px] text-white/55">أيام الدوام المتاحة</span>
             <div className="flex flex-wrap gap-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2">
               {WEEKDAY_OPTIONS.map((day) => (
-                <label key={day} className="flex items-center gap-1 text-[11px] text-white/85">
+                <label key={day.value} className="flex items-center gap-1 text-[11px] text-white/85">
                   <input
                     type="checkbox"
-                    checked={availableDays.includes(day)}
+                    checked={availableDays.includes(day.value)}
                     disabled={loading}
                     onChange={(e) => {
                       setAvailableDays((current) => {
                         if (e.target.checked) {
-                          return [...current, day]
+                          return [...current, day.value]
                         }
-                        return current.filter((item) => item !== day)
+                        return current.filter((item) => item !== day.value)
                       })
                     }}
                   />
-                  {day}
+                  {day.label}
                 </label>
               ))}
             </div>

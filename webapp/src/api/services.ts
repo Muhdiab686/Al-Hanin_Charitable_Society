@@ -210,6 +210,16 @@ export async function fetchBeneficiaryMedicalWallet(
   return data
 }
 
+export async function fetchBeneficiaryWalletSelf(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`${v1}/beneficiary/medical-wallet`)
+  return data
+}
+
+export async function fetchDoctorWallet(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`${v1}/doctor/wallet`)
+  return data
+}
+
 export async function creditBeneficiaryMedicalWallet(
   beneficiaryId: number,
   payload: { amount: number; prescription_reference?: string; notes?: string },
@@ -597,14 +607,8 @@ export async function cancelAppointment(
   return data
 }
 
-export async function approveAppointment(
-  appointmentId: number,
-  payload: { doctor_id: number; scheduled_at: string },
-): Promise<unknown> {
-  const { data } = await apiClient.patch(
-    `${v1}/appointments/${appointmentId}/approve`,
-    payload,
-  )
+export async function approveAppointment(appointmentId: number): Promise<unknown> {
+  const { data } = await apiClient.patch(`${v1}/appointments/${appointmentId}/approve`)
   return data
 }
 
@@ -1040,7 +1044,8 @@ export async function requestBeneficiaryAppointment(payload: {
   doctor_id: number
   requested_specialty: string
   reason?: string
-  preferred_date?: string
+  preferred_date: string
+  preferred_time: string
 }): Promise<unknown> {
   const { data } = await apiClient.post(`${v1}/appointments/request`, payload)
   return data

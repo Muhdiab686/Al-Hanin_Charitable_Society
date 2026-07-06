@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\WalletEntryCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DisburseMedicalPrescriptionRequest;
 use App\Http\Requests\ReviewMedicalPrescriptionRequest;
@@ -10,6 +11,7 @@ use App\Models\FinancialTransaction;
 use App\Models\MedicalPrescriptionCredit;
 use App\Models\MedicalRecord;
 use App\Services\AppNotificationService;
+use App\Services\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -99,9 +101,10 @@ class MedicalPrescriptionWorkflowController extends Controller
     public function disburse(
         DisburseMedicalPrescriptionRequest $request,
         MedicalRecord $medicalRecord,
-        AppNotificationService $notifier
+        AppNotificationService $notifier,
+        WalletLedgerService $walletLedger
     ): JsonResponse {
-        $updatedRecord = DB::transaction(function () use ($request, $medicalRecord): MedicalRecord {
+        $updatedRecord = DB::transaction(function () use ($request, $medicalRecord, $walletLedger): MedicalRecord {
             $lockedRecord = MedicalRecord::query()
                 ->whereKey($medicalRecord->id)
                 ->lockForUpdate()
@@ -123,17 +126,9 @@ class MedicalPrescriptionWorkflowController extends Controller
             /** @var Beneficiary $beneficiary */
             $beneficiary = Beneficiary::query()
                 ->whereKey($lockedRecord->beneficiary_id)
-                ->lockForUpdate()
                 ->firstOrFail();
 
-            $beneficiary->medical_wallet_balance = bcadd(
-                (string) $beneficiary->medical_wallet_balance,
-                (string) $lockedRecord->prescription_cost,
-                2
-            );
-            $beneficiary->save();
-
-            MedicalPrescriptionCredit::query()->create([
+            $credit = MedicalPrescriptionCredit::query()->create([
                 'beneficiary_id' => $beneficiary->id,
                 'amount' => $lockedRecord->prescription_cost,
                 'prescription_reference' => 'MEDREC-'.$lockedRecord->id,
@@ -153,6 +148,16 @@ class MedicalPrescriptionWorkflowController extends Controller
                 'recorded_at' => now(),
             ]);
 
+            $walletLedger->creditBeneficiaryCash(
+                $beneficiary,
+                $amount,
+                WalletEntryCategory::PrescriptionCredit,
+                $credit,
+                __('Prescription disbursement for medical record #:id.', ['id' => $lockedRecord->id]),
+                $request->user(),
+                $transaction,
+            );
+
             $lockedRecord->forceFill([
                 'prescription_workflow_status' => 'disbursed',
                 'prescription_disbursed_by' => $request->user()->id,
@@ -166,8 +171,8 @@ class MedicalPrescriptionWorkflowController extends Controller
         $notifier->notifyUser(
             $updatedRecord->beneficiary?->user,
             'تم صرف الوصفة الطبية',
-            'تم تحويل قيمة الوصفة إلى محفظتك الطبية.',
-            '/app/beneficiary/medical',
+            'تم تحويل قيمة الوصفة إلى محفظتك.',
+            '/app/beneficiary/wallet',
             ['medical_record_id' => $updatedRecord->id]
         );
 

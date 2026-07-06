@@ -15,6 +15,8 @@ use App\Models\Beneficiary;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicStaffProfile;
 use App\Services\AppNotificationService;
+use App\Services\DoctorAppointmentAvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -65,9 +67,12 @@ class AppointmentController extends Controller
         return response()->json($query->paginate(15));
     }
 
-    public function store(StoreClinicAppointmentRequest $request): JsonResponse
+    public function store(StoreClinicAppointmentRequest $request, DoctorAppointmentAvailabilityService $availability): JsonResponse
     {
         $validated = $request->validated();
+
+        $scheduledAt = Carbon::parse($validated['scheduled_at']);
+        $availability->assertNoDoctorConflict((int) $validated['doctor_id'], $scheduledAt);
 
         $appointment = ClinicAppointment::query()->create([
             'beneficiary_id' => $validated['beneficiary_id'],
@@ -86,27 +91,22 @@ class AppointmentController extends Controller
         ], 201);
     }
 
-    public function requestAppointment(RequestClinicAppointmentRequest $request, AppNotificationService $notifier): JsonResponse
-    {
+    public function requestAppointment(
+        RequestClinicAppointmentRequest $request,
+        AppNotificationService $notifier
+    ): JsonResponse {
         $beneficiary = Beneficiary::query()
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
         $validated = $request->validated();
-        $doctorProfile = ClinicStaffProfile::query()
-            ->where('user_id', $validated['doctor_id'])
-            ->where('is_active', true)
-            ->first();
-        abort_if($doctorProfile === null, 422, 'The selected doctor is not active in clinic staff.');
-        if ($doctorProfile->specialty !== null && $doctorProfile->specialty !== $validated['requested_specialty']) {
-            abort(422, 'The selected doctor does not match the requested specialty.');
-        }
+        $scheduledAt = Carbon::parse($validated['preferred_date'].' '.$validated['preferred_time']);
 
         $appointment = ClinicAppointment::query()->create([
             'beneficiary_id' => $beneficiary->id,
             'doctor_id' => $validated['doctor_id'],
             'created_by' => $request->user()->id,
-            'scheduled_at' => $validated['preferred_date'] ?? now()->addDays(3),
+            'scheduled_at' => $scheduledAt,
             'status' => 'pending',
             'workflow_status' => AppointmentWorkflowStatus::PendingApproval->value,
             'requested_specialty' => $validated['requested_specialty'],
@@ -148,19 +148,35 @@ class AppointmentController extends Controller
     public function approve(
         ApproveClinicAppointmentRequest $request,
         ClinicAppointment $appointment,
-        AppNotificationService $notifier
+        AppNotificationService $notifier,
+        DoctorAppointmentAvailabilityService $availability
     ): JsonResponse {
+        abort_if(
+            $appointment->workflow_status === AppointmentWorkflowStatus::RescheduleProposed->value,
+            422,
+            __('This appointment has a pending reschedule proposal. Wait for the beneficiary response before approving.'),
+        );
+
         abort_unless(
-            $appointment->workflow_status === AppointmentWorkflowStatus::PendingApproval->value,
+            $appointment->status === 'pending'
+                && (
+                    $appointment->workflow_status === AppointmentWorkflowStatus::PendingApproval->value
+                    || $appointment->workflow_status === AppointmentWorkflowStatus::Scheduled->value
+                ),
             422,
             __('Only pending appointment requests can be approved.'),
         );
 
-        $validated = $request->validated();
+        abort_if($appointment->doctor_id === null, 422, __('The appointment has no assigned doctor.'));
+        abort_if($appointment->scheduled_at === null, 422, __('The appointment has no scheduled date.'));
+
+        $availability->assertNoDoctorConflict(
+            (int) $appointment->doctor_id,
+            Carbon::parse($appointment->scheduled_at),
+            $appointment->id,
+        );
 
         $appointment->forceFill([
-            'doctor_id' => $validated['doctor_id'],
-            'scheduled_at' => $validated['scheduled_at'],
             'status' => 'scheduled',
             'workflow_status' => AppointmentWorkflowStatus::Scheduled->value,
             'approved_by' => $request->user()->id,
@@ -207,7 +223,8 @@ class AppointmentController extends Controller
     public function proposeReschedule(
         ProposeClinicAppointmentRescheduleRequest $request,
         ClinicAppointment $appointment,
-        AppNotificationService $notifier
+        AppNotificationService $notifier,
+        DoctorAppointmentAvailabilityService $availability
     ): JsonResponse {
         abort_unless(
             in_array($appointment->workflow_status, [
@@ -219,6 +236,46 @@ class AppointmentController extends Controller
         );
 
         $validated = $request->validated();
+
+        $scheduledAt = Carbon::parse($validated['scheduled_at']);
+
+        $isPendingRequest = $appointment->status === 'pending'
+            && in_array($appointment->workflow_status, [
+                AppointmentWorkflowStatus::PendingApproval->value,
+                AppointmentWorkflowStatus::Scheduled->value,
+            ], true);
+
+        if ($isPendingRequest) {
+            abort_if(
+                (int) $validated['doctor_id'] !== (int) $appointment->doctor_id,
+                422,
+                __('The doctor cannot be changed while the request is pending approval.'),
+            );
+
+            $doctorProfile = ClinicStaffProfile::query()
+                ->where('user_id', (int) $appointment->doctor_id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($doctorProfile !== null) {
+                $availability->assertDoctorAvailableOnDate($doctorProfile, $scheduledAt, 'scheduled_at');
+            }
+
+            $availability->assertNoDoctorConflict((int) $appointment->doctor_id, $scheduledAt, $appointment->id);
+
+            $appointment->forceFill([
+                'scheduled_at' => $validated['scheduled_at'],
+                'proposal_note' => $validated['proposal_note'] ?? null,
+                'workflow_status' => AppointmentWorkflowStatus::PendingApproval->value,
+            ])->save();
+
+            return response()->json([
+                'message' => __('Appointment time updated successfully.'),
+                'appointment' => $appointment->fresh()->load(['beneficiary.family', 'doctor:id,name,email']),
+            ]);
+        }
+
+        $availability->assertNoDoctorConflict((int) $validated['doctor_id'], $scheduledAt, $appointment->id);
 
         $appointment->forceFill([
             'doctor_id' => $validated['doctor_id'],
@@ -263,6 +320,13 @@ class AppointmentController extends Controller
 
         $decision = $request->validated('decision');
         if ($decision === 'accepted') {
+            $proposedAt = Carbon::parse($appointment->proposed_scheduled_at);
+            app(DoctorAppointmentAvailabilityService::class)->assertNoDoctorConflict(
+                (int) $appointment->doctor_id,
+                $proposedAt,
+                $appointment->id,
+            );
+
             $appointment->forceFill([
                 'scheduled_at' => $appointment->proposed_scheduled_at,
                 'status' => 'scheduled',

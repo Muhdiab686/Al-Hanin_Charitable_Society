@@ -251,6 +251,8 @@ class AidRequestController extends Controller
                     'delivered_at' => now(),
                     'delivery_note' => $validated['delivery_note'] ?? null,
                 ])->save();
+
+                BeneficiaryMedicalWalletController::recordMaterialAllocationDelivery($allocation, $request);
             }
 
             $pending = AidInventoryAllocation::query()
@@ -269,6 +271,8 @@ class AidRequestController extends Controller
         });
 
         if ($aidRequest->fresh()->status === 'fulfilled') {
+            BeneficiaryMedicalWalletController::creditCashAidRequestIfNeeded($aidRequest->fresh(), $request);
+
             $notifier->notifyUser(
                 $aidRequest->beneficiary?->user,
                 'تم تسليم المساعدة',
@@ -343,6 +347,8 @@ class AidRequestController extends Controller
                     'delivered_at' => now(),
                     'delivery_note' => $deliveryNote,
                 ])->save();
+
+                BeneficiaryMedicalWalletController::recordMaterialAllocationDelivery($allocation, $request);
             }
 
             $aidRequestIds = $pendingAllocations->pluck('aid_request_id')->unique()->values();
@@ -355,6 +361,11 @@ class AidRequestController extends Controller
                     AidRequest::query()
                         ->whereKey($aidRequestId)
                         ->update(['status' => 'fulfilled']);
+
+                    $fulfilledRequest = AidRequest::query()->with('beneficiary')->find($aidRequestId);
+                    if ($fulfilledRequest !== null) {
+                        BeneficiaryMedicalWalletController::creditCashAidRequestIfNeeded($fulfilledRequest, $request);
+                    }
                 }
             }
 

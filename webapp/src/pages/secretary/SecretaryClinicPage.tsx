@@ -1,26 +1,61 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { WEEKDAY_OPTIONS } from '../../constants/medicalSpecialties'
 import type { Paginated } from '../../types/models'
 
-const WEEKDAY_OPTIONS = [
-  'Saturday',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-]
+function toDatetimeLocalValue(value: unknown): string {
+  if (!value) {
+    return new Date().toISOString().slice(0, 16)
+  }
 
-function apptStatusAr(s: string): string {
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 16)
+  }
+
+  const pad = (part: number) => String(part).padStart(2, '0')
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function apptStatusAr(a: Record<string, unknown>): string {
+  const status = String(a.status ?? '')
+  const workflow = String(a.workflow_status ?? '')
+
+  if (workflow === 'reschedule_proposed') {
+    return 'اقتراح تعديل — بانتظار المستفيد'
+  }
+
+  if (workflow === 'pending_approval' || status === 'pending') {
+    return 'بانتظار الاعتماد'
+  }
+
   const m: Record<string, string> = {
-    pending: 'بانتظار الاعتماد',
     scheduled: 'مجدول',
     cancelled: 'ملغى',
     completed: 'مُنجَز',
   }
-  return m[s] ?? s
+
+  return m[status] ?? status
+}
+
+function canApproveAppointment(a: Record<string, unknown>): boolean {
+  const status = String(a.status ?? '')
+  const workflow = String(a.workflow_status ?? '')
+
+  if (workflow === 'reschedule_proposed') {
+    return false
+  }
+
+  return status === 'pending' && (workflow === 'pending_approval' || workflow === 'scheduled')
+}
+
+function isPendingApprovalRequest(a: Record<string, unknown>): boolean {
+  const workflow = String(a.workflow_status ?? '')
+  const status = String(a.status ?? '')
+
+  return workflow === 'pending_approval' || (status === 'pending' && workflow === 'scheduled')
 }
 
 function staffRoleAr(r: string): string {
@@ -54,14 +89,15 @@ export function SecretaryClinicPage() {
   const [showCreateApptDialog, setShowCreateApptDialog] = useState(false)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
   const [approveTargetId, setApproveTargetId] = useState<number | null>(null)
-  const [approveDoctorId, setApproveDoctorId] = useState('')
-  const [approveWhen, setApproveWhen] = useState(() => new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16))
+  const [approveTarget, setApproveTarget] = useState<Record<string, unknown> | null>(null)
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null)
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false)
   const [rescheduleTargetId, setRescheduleTargetId] = useState<number | null>(null)
+  const [rescheduleTarget, setRescheduleTarget] = useState<Record<string, unknown> | null>(null)
   const [rescheduleDoctorId, setRescheduleDoctorId] = useState('')
   const [rescheduleWhen, setRescheduleWhen] = useState(() => new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 16))
   const [rescheduleNote, setRescheduleNote] = useState('')
+  const [approveDialogErr, setApproveDialogErr] = useState<string | null>(null)
   const [beneficiaries, setBeneficiaries] = useState<Record<string, unknown>[]>([])
 
   const doctors = useMemo(() => {
@@ -188,26 +224,32 @@ export function SecretaryClinicPage() {
     }
     setMsg(null)
     setErr(null)
+    setApproveDialogErr(null)
     try {
-      await api.approveAppointment(approveTargetId, {
-        doctor_id: Number(approveDoctorId),
-        scheduled_at: new Date(approveWhen).toISOString(),
-      })
+      await api.approveAppointment(approveTargetId)
       setMsg('تم اعتماد الطلب وجدولة الموعد بنجاح.')
       setShowApproveDialog(false)
       setApproveTargetId(null)
-      setApproveDoctorId('')
+      setApproveTarget(null)
       await loadAppts(apptPage)
     } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل اعتماد الموعد'))
+      const message = extractErrorMessage(ex, 'فشل اعتماد الموعد')
+      setApproveDialogErr(message)
+      setErr(message)
     }
   }
 
   async function onProposeReschedule() {
-    if (!rescheduleTargetId) {
+    if (!rescheduleTargetId || !rescheduleTarget) {
       return
     }
-    if (!rescheduleDoctorId) {
+
+    const pendingApproval = isPendingApprovalRequest(rescheduleTarget)
+    const doctorId = pendingApproval
+      ? Number((rescheduleTarget.doctor as { id?: number } | undefined)?.id ?? rescheduleTarget.doctor_id ?? 0)
+      : Number(rescheduleDoctorId)
+
+    if (!doctorId) {
       setErr('اختر الطبيب أولاً قبل إرسال التعديل.')
       return
     }
@@ -215,13 +257,18 @@ export function SecretaryClinicPage() {
     setErr(null)
     try {
       await api.proposeAppointmentReschedule(rescheduleTargetId, {
-        doctor_id: Number(rescheduleDoctorId),
+        doctor_id: doctorId,
         scheduled_at: new Date(rescheduleWhen).toISOString(),
         proposal_note: rescheduleNote.trim() || null,
       })
-      setMsg('تم إرسال اقتراح التعديل للمستفيد.')
+      setMsg(
+        pendingApproval
+          ? 'تم تحديث وقت الطلب — يمكنك الآن اعتماد الموعد.'
+          : 'تم إرسال اقتراح التعديل للمستفيد.',
+      )
       setShowRescheduleDialog(false)
       setRescheduleTargetId(null)
+      setRescheduleTarget(null)
       setRescheduleDoctorId('')
       setRescheduleNote('')
       await loadAppts(apptPage)
@@ -325,6 +372,7 @@ export function SecretaryClinicPage() {
               }}
             >
               <option value="">كل الحالات</option>
+              <option value="pending">بانتظار الاعتماد</option>
               <option value="scheduled">مجدولة</option>
               <option value="completed">منجزة</option>
               <option value="cancelled">ملغاة</option>
@@ -373,8 +421,11 @@ export function SecretaryClinicPage() {
               ) : (
                 appts.map((a, idx) => {
                   const st = String(a.status ?? '')
+                  const wf = String(a.workflow_status ?? '')
                   const ben = a.beneficiary as { name?: string } | undefined
                   const doc = a.doctor as { name?: string } | undefined
+                  const showApprove = canApproveAppointment(a)
+                  const pendingApproval = isPendingApprovalRequest(a)
 
                   return (
                     <tr key={String(a.id)} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/12' : ''}`}>
@@ -389,20 +440,23 @@ export function SecretaryClinicPage() {
                               ? 'bg-sky-500/15 text-sky-100 ring-sky-400/35'
                               : st === 'cancelled'
                                 ? 'bg-rose-500/15 text-rose-100 ring-rose-400/35'
-                                : 'bg-emerald-500/12 text-emerald-100 ring-emerald-400/30'
+                                : wf === 'reschedule_proposed'
+                                  ? 'bg-amber-500/15 text-amber-100 ring-amber-400/35'
+                                  : 'bg-emerald-500/12 text-emerald-100 ring-emerald-400/30'
                           }`}
                         >
-                          {apptStatusAr(st)}
+                          {apptStatusAr(a)}
                         </span>
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
-                          {st === 'pending' ? (
+                          {showApprove ? (
                             <button
                               type="button"
                               onClick={() => {
                                 setApproveTargetId(Number(a.id))
-                                setApproveDoctorId('')
+                                setApproveTarget(a)
+                                setApproveDialogErr(null)
                                 setShowApproveDialog(true)
                               }}
                               className="rounded-md bg-emerald-700/80 px-2 py-1 text-[11px] text-white hover:bg-emerald-600"
@@ -419,20 +473,23 @@ export function SecretaryClinicPage() {
                               إلغاء
                             </button>
                           ) : null}
-                          {(st === 'pending' || st === 'scheduled') ? (
+                          {(pendingApproval || st === 'scheduled') ? (
                             <button
                               type="button"
                               onClick={() => {
                                 setRescheduleTargetId(Number(a.id))
-                                setRescheduleDoctorId(String((a.doctor as { id?: number } | undefined)?.id ?? ''))
+                                setRescheduleTarget(a)
+                                setRescheduleDoctorId(String((a.doctor as { id?: number } | undefined)?.id ?? a.doctor_id ?? ''))
+                                setRescheduleWhen(toDatetimeLocalValue(a.scheduled_at))
+                                setRescheduleNote('')
                                 setShowRescheduleDialog(true)
                               }}
                               className="rounded-md bg-amber-700/80 px-2 py-1 text-[11px] text-white hover:bg-amber-600"
                             >
-                              تعديل الموعد
+                              {pendingApproval ? 'تعديل الوقت' : 'اقتراح تعديل'}
                             </button>
                           ) : null}
-                          {st !== 'pending' && st !== 'scheduled' ? (
+                          {!showApprove && st !== 'scheduled' && wf !== 'reschedule_proposed' && st !== 'pending' ? (
                             <span className="text-white/38">—</span>
                           ) : null}
                         </div>
@@ -516,20 +573,20 @@ export function SecretaryClinicPage() {
                 <span className="text-[11px] text-white/52">أيام الدوام المتاحة</span>
                 <div className="flex flex-wrap gap-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2">
                   {WEEKDAY_OPTIONS.map((day) => (
-                    <label key={day} className="flex items-center gap-1 text-[11px] text-white/85">
+                    <label key={day.value} className="flex items-center gap-1 text-[11px] text-white/85">
                       <input
                         type="checkbox"
-                        checked={availableDays.includes(day)}
+                        checked={availableDays.includes(day.value)}
                         onChange={(e) => {
                           setAvailableDays((current) => {
                             if (e.target.checked) {
-                              return [...current, day]
+                              return [...current, day.value]
                             }
-                            return current.filter((item) => item !== day)
+                            return current.filter((item) => item !== day.value)
                           })
                         }}
                       />
-                      {day}
+                      {day.label}
                     </label>
                   ))}
                 </div>
@@ -635,27 +692,30 @@ export function SecretaryClinicPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <select
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                value={approveDoctorId}
-                onChange={(e) => setApproveDoctorId(e.target.value)}
-              >
-                <option value="">— اختر الطبيب —</option>
-                {doctors.map((d) => {
-                  const u = d.user as { id?: number; name?: string }
-                  return (
-                    <option key={String(u?.id)} value={String(u?.id)}>
-                      {String(u?.name ?? 'طبيب')} (#{String(u?.id ?? '')})
-                    </option>
-                  )
-                })}
-              </select>
-              <input
-                type="datetime-local"
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                value={approveWhen}
-                onChange={(e) => setApproveWhen(e.target.value)}
-              />
+              <p className="text-xs text-white/55">
+                الطبيب والموعد محدّدان مسبقاً من قبل المستفيد — لا يمكن تعديلهما عند الاعتماد.
+              </p>
+              {approveDialogErr ? (
+                <div className="rounded-lg border border-red-400/35 bg-red-500/12 px-3 py-2 text-xs text-red-100">
+                  {approveDialogErr}
+                </div>
+              ) : null}
+              <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                <p className="text-[10px] text-white/45">الطبيب</p>
+                <p className="mt-1 text-sm font-medium text-white">
+                  {String((approveTarget?.doctor as { name?: string } | undefined)?.name ?? '—')}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                <p className="text-[10px] text-white/45">الموعد المطلوب</p>
+                <p className="mt-1 text-sm font-medium text-white">
+                  {String(approveTarget?.scheduled_at ?? '—')}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                <p className="text-[10px] text-white/45">الاختصاص</p>
+                <p className="mt-1 text-sm text-white/85">{String(approveTarget?.requested_specialty ?? '—')}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => void onApproveTarget()}
@@ -668,31 +728,55 @@ export function SecretaryClinicPage() {
         </div>
       ) : null}
 
-      {showRescheduleDialog && rescheduleTargetId ? (
+      {showRescheduleDialog && rescheduleTargetId && rescheduleTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg rounded-2xl border border-amber-300/25 bg-slate-950 p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-white">اقتراح تعديل موعد #{rescheduleTargetId}</h4>
-              <button type="button" onClick={() => setShowRescheduleDialog(false)} className="rounded-lg border border-white/20 px-3 py-1 text-xs">
+              <h4 className="text-sm font-semibold text-white">
+                {isPendingApprovalRequest(rescheduleTarget) ? 'تعديل وقت الطلب' : 'اقتراح تعديل موعد'} #{rescheduleTargetId}
+              </h4>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRescheduleDialog(false)
+                  setRescheduleTargetId(null)
+                  setRescheduleTarget(null)
+                }}
+                className="rounded-lg border border-white/20 px-3 py-1 text-xs"
+              >
                 إغلاق
               </button>
             </div>
             <div className="space-y-3">
-              <select
-                className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                value={rescheduleDoctorId}
-                onChange={(e) => setRescheduleDoctorId(e.target.value)}
-              >
-                <option value="">— اختر الطبيب —</option>
-                {doctors.map((d) => {
-                  const u = d.user as { id?: number; name?: string }
-                  return (
-                    <option key={String(u?.id)} value={String(u?.id)}>
-                      {String(u?.name ?? 'طبيب')} (#{String(u?.id ?? '')})
-                    </option>
-                  )
-                })}
-              </select>
+              {isPendingApprovalRequest(rescheduleTarget) ? (
+                <>
+                  <p className="text-xs text-white/55">
+                    يُحدَّث وقت هذا الطلب فقط. الطبيب يبقى كما اختاره المستفيد.
+                  </p>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    <p className="text-[10px] text-white/45">الطبيب</p>
+                    <p className="mt-1 text-sm font-medium text-white">
+                      {String((rescheduleTarget.doctor as { name?: string } | undefined)?.name ?? '—')}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <select
+                  className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={rescheduleDoctorId}
+                  onChange={(e) => setRescheduleDoctorId(e.target.value)}
+                >
+                  <option value="">— اختر الطبيب —</option>
+                  {doctors.map((d) => {
+                    const u = d.user as { id?: number; name?: string }
+                    return (
+                      <option key={String(u?.id)} value={String(u?.id)}>
+                        {String(u?.name ?? 'طبيب')} (#{String(u?.id ?? '')})
+                      </option>
+                    )
+                  })}
+                </select>
+              )}
               <input
                 type="datetime-local"
                 className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
@@ -701,7 +785,7 @@ export function SecretaryClinicPage() {
               />
               <input
                 className="w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                placeholder="ملاحظة للمستفيد (اختياري)"
+                placeholder="ملاحظة (اختياري)"
                 value={rescheduleNote}
                 onChange={(e) => setRescheduleNote(e.target.value)}
               />
@@ -710,7 +794,7 @@ export function SecretaryClinicPage() {
                 onClick={() => void onProposeReschedule()}
                 className="w-full rounded-lg bg-amber-700 px-4 py-2 text-white"
               >
-                إرسال اقتراح التعديل
+                {isPendingApprovalRequest(rescheduleTarget) ? 'حفظ الوقت الجديد' : 'إرسال اقتراح التعديل'}
               </button>
             </div>
           </div>

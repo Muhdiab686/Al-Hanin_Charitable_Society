@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\ClinicStaffController;
 use App\Http\Controllers\Api\DoctorPayoutController;
+use App\Http\Controllers\Api\DoctorWalletController;
 use App\Http\Controllers\Api\MedicalRecordController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,4 +25,5 @@ Route::prefix('v1/doctor')->middleware(['auth:sanctum', 'role:doctor'])->group(f
 
     Route::get('/profile', [ClinicStaffController::class, 'showMine']);
     Route::put('/profile', [ClinicStaffController::class, 'updateMine']);
+    Route::get('/wallet', [DoctorWalletController::class, 'showSelf']);
 });

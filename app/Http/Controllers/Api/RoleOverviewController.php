@@ -424,7 +424,7 @@ class RoleOverviewController extends Controller
                 ['key' => 'aid_pending_review', 'label' => 'طلبات بانتظار الاعتماد', 'value' => AidRequest::query()->where('beneficiary_id', $beneficiary->id)->where('status', 'pending')->count()],
                 ['key' => 'scheduled_appointments', 'label' => 'مواعيد مستقبلية مجدولة', 'value' => $appointmentsUpcoming],
                 ['key' => 'medical_followups', 'label' => 'سجلات طبية مسجّلة', 'value' => $recordsCount],
-                ['key' => 'wallet', 'label' => 'رصيد المحفظة الطبيّة', 'value' => (string) $beneficiary->medical_wallet_balance],
+                ['key' => 'wallet', 'label' => 'رصيد المحفظة', 'value' => (string) $beneficiary->medical_wallet_balance],
             ],
             'charts' => [
                 $this->barChart('مساعداتك حسب الحالة', $aidByStatus, [

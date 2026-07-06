@@ -17,6 +17,7 @@ class ClinicStaffProfile extends Model
         'available_days',
         'monthly_salary',
         'consultation_fee',
+        'wallet_balance',
         'is_active',
     ];
 
@@ -29,6 +30,7 @@ class ClinicStaffProfile extends Model
             'available_days' => 'array',
             'monthly_salary' => 'decimal:2',
             'consultation_fee' => 'decimal:2',
+            'wallet_balance' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

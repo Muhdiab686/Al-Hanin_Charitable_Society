@@ -77,13 +77,14 @@ class DonorChatApiTest extends TestCase
 
         $this->postJson('/api/v1/donor-chat/messages', [
             'body' => 'على الرحب والسعة',
+            'recipient_role' => 'recording_secretary',
         ])
             ->assertCreated()
             ->assertJsonPath('message.is_from_donor', true);
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/communications/donor-chat/donors/'.$donor->id.'/messages')->assertOk()->assertJsonCount(2, 'messages');
+        $this->getJson('/api/v1/communications/donor-chat/donors/'.$donor->id.'/messages?recipient_role=recording_secretary')->assertOk()->assertJsonCount(2, 'messages');
 
         $this->assertDatabaseCount('donor_chat_messages', 2);
         $this->assertDatabaseHas('donor_chat_messages', [
