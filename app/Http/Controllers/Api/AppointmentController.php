@@ -28,18 +28,20 @@ class AppointmentController extends Controller
             ->latest('scheduled_at');
 
         $user = $request->user();
+        $role = $user->role instanceof UserRole
+            ? $user->role
+            : UserRole::tryFrom((string) $user->getRawOriginal('role'));
 
-        if ($user->role === UserRole::Beneficiary) {
-            $beneficiaryId = Beneficiary::query()->where('user_id', $user->id)->value('id');
-            if ($beneficiaryId) {
-                $query->where('beneficiary_id', $beneficiaryId);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-        }
+        $canManageClinic = $user->can('appointments.manage');
 
-        if ($user->role === UserRole::Doctor) {
+        if ($canManageClinic) {
+            // السكرتير / أمين السر / الإدارة: كل المواعيد مع فلاتر اختيارية أدناه
+        } elseif ($role === UserRole::Doctor || $user->hasRole(UserRole::Doctor->value)) {
             $query->where('doctor_id', $user->id);
+        } else {
+            // المستفيد (وأي دور بلا صلاحية إدارة العيادة): مواعيده فقط
+            $beneficiaryId = Beneficiary::query()->where('user_id', $user->id)->value('id');
+            $query->where('beneficiary_id', $beneficiaryId ?? 0);
         }
 
         if ($request->filled('from')) {
@@ -58,11 +60,41 @@ class AppointmentController extends Controller
             $query->where('workflow_status', (string) $request->string('workflow_status'));
         }
 
-        if ($request->filled('beneficiary_id') && $user->role !== UserRole::Beneficiary) {
+        if ($request->filled('beneficiary_id') && $canManageClinic) {
             $query->where('beneficiary_id', (int) $request->integer('beneficiary_id'));
         }
 
+        if ($request->filled('doctor_id') && $canManageClinic) {
+            $query->where('doctor_id', (int) $request->integer('doctor_id'));
+        }
+
         return response()->json($query->paginate(15));
+    }
+
+    public function show(Request $request, ClinicAppointment $appointment): JsonResponse
+    {
+        $user = $request->user();
+        $canManageClinic = $user->can('appointments.manage');
+        $role = $user->role instanceof UserRole
+            ? $user->role
+            : UserRole::tryFrom((string) $user->getRawOriginal('role'));
+
+        if (! $canManageClinic) {
+            if ($role === UserRole::Doctor || $user->hasRole(UserRole::Doctor->value)) {
+                abort_unless((int) $appointment->doctor_id === (int) $user->id, 403);
+            } else {
+                $beneficiaryId = Beneficiary::query()->where('user_id', $user->id)->value('id');
+                abort_unless((int) $appointment->beneficiary_id === (int) ($beneficiaryId ?? 0), 403);
+            }
+        }
+
+        return response()->json([
+            'appointment' => $appointment->load([
+                'beneficiary.family',
+                'doctor:id,name,email',
+                'doctor.clinicStaffProfile:user_id,specialty,bio',
+            ]),
+        ]);
     }
 
     public function store(StoreClinicAppointmentRequest $request): JsonResponse
@@ -117,7 +149,7 @@ class AppointmentController extends Controller
             ['secretary', 'recording_secretary', 'admin'],
             'طلب موعد طبي جديد',
             'تم إرسال طلب موعد طبي جديد ويحتاج المراجعة.',
-            '/app/secretary/clinic',
+            '/app/secretary/clinic?appointment_id='.$appointment->id,
             ['appointment_id' => $appointment->id, 'beneficiary_id' => $beneficiary->id]
         );
 
@@ -172,7 +204,7 @@ class AppointmentController extends Controller
             $beneficiaryUser,
             'تمت الموافقة على الموعد الطبي',
             'تمت جدولة موعدك الطبي بنجاح.',
-            '/app/beneficiary/appointments',
+            '/app/beneficiary/appointments?appointment_id='.$appointment->id,
             ['appointment_id' => $appointment->id]
         );
 
@@ -234,7 +266,7 @@ class AppointmentController extends Controller
             $appointment->beneficiary?->user,
             'اقتراح تعديل موعد طبي',
             'تم إرسال وقت بديل لموعدك الطبي، يرجى قبول أو رفض التعديل.',
-            '/app/beneficiary/appointments',
+            '/app/beneficiary/appointments?appointment_id='.$appointment->id,
             ['appointment_id' => $appointment->id]
         );
 
@@ -289,7 +321,7 @@ class AppointmentController extends Controller
             $decision === 'accepted'
                 ? 'قام المستفيد بقبول الوقت البديل للموعد.'
                 : 'قام المستفيد برفض الوقت البديل للموعد.',
-            '/app/secretary/clinic',
+            '/app/secretary/clinic?appointment_id='.$appointment->id,
             ['appointment_id' => $appointment->id]
         );
 

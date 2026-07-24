@@ -14,6 +14,8 @@ class AidDistributionPlan extends Model
     protected $fillable = [
         'title',
         'aid_type',
+        'item_label',
+        'inventory_item_id',
         'campaign_id',
         'distribution_date',
         'distribution_frequency',
@@ -59,5 +61,10 @@ class AidDistributionPlan extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function inventoryItem(): BelongsTo
+    {
+        return $this->belongsTo(InventoryItem::class);
     }
 }

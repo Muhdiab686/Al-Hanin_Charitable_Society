@@ -161,7 +161,7 @@ class DemoDataSeeder extends Seeder
                 ->get($month % 6);
 
             $aidType = match ($month % 3) {
-                0 => 'medical_prescription',
+                0 => 'surgery',
                 1 => 'urgent_financial',
                 default => 'special_item',
             };

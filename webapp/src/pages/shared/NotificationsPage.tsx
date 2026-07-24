@@ -11,6 +11,11 @@ type NotificationRow = Record<string, unknown> & {
     title?: string
     message?: string
     action_url?: string | null
+    meta?: {
+      appointment_id?: number | string
+      beneficiary_id?: number | string
+      [key: string]: unknown
+    }
   }
   created_at?: string | null
 }
@@ -97,7 +102,10 @@ export function NotificationsPage() {
       return url
     }
 
-    const parts = url.split('/')
+    const qIdx = url.indexOf('?')
+    const pathOnly = qIdx >= 0 ? url.slice(0, qIdx) : url
+    const query = qIdx >= 0 ? url.slice(qIdx) : ''
+    const parts = pathOnly.split('/')
     if (parts.length < 4) {
       return url
     }
@@ -107,14 +115,72 @@ export function NotificationsPage() {
       return url
     }
 
+    // صفحة العيادة: السكرتير /admin (overview) فقط
+    if (parts[3] === 'clinic') {
+      if (user.role === 'admin') {
+        return `/app/admin/clinic/overview${query}`
+      }
+      if (user.role === 'secretary') {
+        return `/app/secretary/clinic${query}`
+      }
+      // أمين السر وغيره: أبقِ رابط السكرتير مع المعرّف (قد يحتاج صلاحية لاحقاً)
+      return `/app/secretary/clinic${query}`
+    }
+
     parts[2] = currentRolePath
-    return parts.join('/')
+    return `${parts.join('/')}${query}`
+  }
+
+  function resolveAppointmentId(row: NotificationRow): number | null {
+    const fromMeta = row.data?.meta?.appointment_id
+    if (fromMeta != null && String(fromMeta).trim() !== '') {
+      const n = Number(fromMeta)
+      if (Number.isFinite(n) && n > 0) {
+        return n
+      }
+    }
+
+    const rawUrl = row.data?.action_url
+    if (!rawUrl) {
+      return null
+    }
+    try {
+      const q = rawUrl.includes('?') ? new URLSearchParams(rawUrl.slice(rawUrl.indexOf('?') + 1)) : null
+      const fromUrl = q?.get('appointment_id')
+      if (fromUrl) {
+        const n = Number(fromUrl)
+        if (Number.isFinite(n) && n > 0) {
+          return n
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return null
+  }
+
+  function resolveActionUrl(row: NotificationRow): string | null {
+    let url = normalizeActionUrl(row.data?.action_url)
+    if (!url) {
+      return null
+    }
+
+    const appointmentId = resolveAppointmentId(row)
+    if (appointmentId != null && !url.includes('appointment_id=')) {
+      const sep = url.includes('?') ? '&' : '?'
+      url = `${url}${sep}appointment_id=${appointmentId}`
+    }
+
+    return url
   }
 
   async function onOpenNotification(row: NotificationRow) {
-    const actionUrl = normalizeActionUrl(row.data?.action_url)
+    const actionUrl = resolveActionUrl(row)
+    const appointmentId = resolveAppointmentId(row)
     if (actionUrl) {
-      navigate(actionUrl)
+      navigate(actionUrl, {
+        state: appointmentId != null ? { focusAppointmentId: appointmentId } : undefined,
+      })
     }
     if (!row.read_at) {
       await onMarkAsRead(row.id)
@@ -161,7 +227,7 @@ export function NotificationsPage() {
                     <p className="mt-2 text-[11px] text-white/45">{String(row.created_at ?? '').replace('T', ' ').slice(0, 19)}</p>
                   </div>
                   <div className="flex flex-col gap-2">
-                    {row.data?.action_url ? (
+                    {resolveActionUrl(row) ? (
                       <button
                         type="button"
                         className="rounded-md border border-sky-300/35 bg-sky-500/10 px-2 py-1 text-[11px] text-sky-50"

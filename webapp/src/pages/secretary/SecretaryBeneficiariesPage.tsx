@@ -1,6 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import type { Paginated } from '../../types/models'
 
 const ENROLL_AR: { value: string; label: string }[] = [
@@ -20,6 +22,8 @@ export function SecretaryBeneficiariesPage() {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const createLock = useSubmitLock()
+  const editLock = useSubmitLock()
 
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
@@ -29,6 +33,7 @@ export function SecretaryBeneficiariesPage() {
   const [famAddress, setFamAddress] = useState('')
   const [members, setMembers] = useState('4')
   const [famIncome, setFamIncome] = useState('')
+  const [housingStatus, setHousingStatus] = useState('rented')
   const [famEnrollNew, setFamEnrollNew] = useState<'draft' | 'pending_board'>('pending_board')
 
   const [bName, setBName] = useState('')
@@ -52,6 +57,7 @@ export function SecretaryBeneficiariesPage() {
   const [profAddress, setProfAddress] = useState('')
   const [profMembers, setProfMembers] = useState('')
   const [profIncome, setProfIncome] = useState('')
+  const [profHousingStatus, setProfHousingStatus] = useState('')
 
   const [walletBenId, setWalletBenId] = useState('')
   const [walletBalance, setWalletBalance] = useState<string | null>(null)
@@ -163,49 +169,52 @@ export function SecretaryBeneficiariesPage() {
     setErr(null)
     const nid = nationalId.trim() || `NID${Date.now()}`
 
-    try {
-      const response = await api.createBeneficiary({
-        family: {
-          head_name: headName.trim(),
-          phone: famPhone.trim() || null,
-          address: famAddress.trim() || null,
-          members_count: Number(members),
-          monthly_income: famIncome.trim() ? Number(famIncome) : 0,
-          enrollment_status: famEnrollNew,
-        },
-        beneficiary: {
-          national_id: nid,
-          name: bName.trim(),
-          is_head_of_family: true,
-          family_relationship: 'head',
-          phone: benPhone.trim() || null,
-          date_of_birth: benDob.trim() || null,
-          notes: benNotes.trim() || null,
-        },
-        members: createMembers
-          .filter((member) => member.name.trim())
-          .map((member) => ({
-            national_id: member.national_id.trim() || `NID-M-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            name: member.name.trim(),
-            family_relationship: member.family_relationship,
-            gender: member.gender || null,
-          })),
-      })
-      const credentials = response.credentials
-      const familyId = Number((response.beneficiary?.family as { id?: number } | undefined)?.id ?? response.beneficiary?.family_id)
-      cacheFamilyCredentials(familyId, credentials ?? null)
-      if (credentials?.email && credentials.password) {
-        setMsg(`تم التسجيل وتوليد بيانات دخول المستفيد: ${credentials.email} / ${credentials.password}`)
-      } else {
-        setMsg('تم تسجيل المستفيد والعائلة.')
+    await createLock.run(async () => {
+      try {
+        const response = await api.createBeneficiary({
+          family: {
+            head_name: headName.trim(),
+            phone: famPhone.trim() || null,
+            address: famAddress.trim() || null,
+            members_count: Number(members),
+            monthly_income: famIncome.trim() ? Number(famIncome) : 0,
+            housing_status: housingStatus,
+            enrollment_status: famEnrollNew,
+          },
+          beneficiary: {
+            national_id: nid,
+            name: bName.trim(),
+            is_head_of_family: true,
+            family_relationship: 'head',
+            phone: benPhone.trim() || null,
+            date_of_birth: benDob.trim() || null,
+            notes: benNotes.trim() || null,
+          },
+          members: createMembers
+            .filter((member) => member.name.trim())
+            .map((member) => ({
+              national_id: member.national_id.trim() || `NID-M-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              name: member.name.trim(),
+              family_relationship: member.family_relationship,
+              gender: member.gender || null,
+            })),
+        })
+        const credentials = response.credentials
+        const familyId = Number((response.beneficiary?.family as { id?: number } | undefined)?.id ?? response.beneficiary?.family_id)
+        cacheFamilyCredentials(familyId, credentials ?? null)
+        if (credentials?.email && credentials.password) {
+          setMsg(`تم التسجيل وتوليد بيانات دخول المستفيد: ${credentials.email} / ${credentials.password}`)
+        } else {
+          setMsg('تم تسجيل المستفيد والعائلة.')
+        }
+        setShowCreateDialog(false)
+        setNationalId('')
+        setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
       }
-      setShowCreateDialog(false)
-      setNationalId('')
-      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
-    }
+    })
   }
 
   async function onPatchBeneficiary(e: FormEvent) {
@@ -213,32 +222,34 @@ export function SecretaryBeneficiariesPage() {
     setMsg(null)
     setErr(null)
 
-    try {
-      const payload: Record<string, unknown> = {}
+    await editLock.run(async () => {
+      try {
+        const payload: Record<string, unknown> = {}
 
-      if (editName.trim()) {
-        payload.name = editName.trim()
+        if (editName.trim()) {
+          payload.name = editName.trim()
+        }
+
+        if (editNationalId.trim()) {
+          payload.national_id = editNationalId.trim()
+        }
+
+        if (editPhone.trim()) {
+          payload.phone = editPhone.trim()
+        }
+
+        if (editDob.trim()) {
+          payload.date_of_birth = editDob.trim()
+        }
+
+        await api.updateBeneficiary(Number(editId), payload)
+        setMsg('تم تحديث بيانات المستفيد.')
+        setShowEditDialog(false)
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex as Error, 'فشل التحديث'))
       }
-
-      if (editNationalId.trim()) {
-        payload.national_id = editNationalId.trim()
-      }
-
-      if (editPhone.trim()) {
-        payload.phone = editPhone.trim()
-      }
-
-      if (editDob.trim()) {
-        payload.date_of_birth = editDob.trim()
-      }
-
-      await api.updateBeneficiary(Number(editId), payload)
-      setMsg('تم تحديث بيانات المستفيد.')
-      setShowEditDialog(false)
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex as Error, 'فشل التحديث'))
-    }
+    })
   }
 
   async function onRecalc() {
@@ -349,6 +360,10 @@ export function SecretaryBeneficiariesPage() {
 
       if (profIncome.trim()) {
         payload.monthly_income = Number(profIncome)
+      }
+
+      if (profHousingStatus.trim()) {
+        payload.housing_status = profHousingStatus.trim()
       }
 
       await api.updateFamilyProfile(Number(famProfileId), payload)
@@ -777,6 +792,20 @@ export function SecretaryBeneficiariesPage() {
                 value={famIncome}
                 onChange={(e) => setFamIncome(e.target.value)}
               />
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-white/55">حالة السكن *</span>
+                <select
+                  required
+                  className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={housingStatus}
+                  onChange={(e) => setHousingStatus(e.target.value)}
+                >
+                  <option value="owned">ملك</option>
+                  <option value="rented">إيجار</option>
+                  <option value="hosted">ضيافة</option>
+                  <option value="unstable">غير مستقر</option>
+                </select>
+              </label>
               <select
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={famEnrollNew}
@@ -886,9 +915,9 @@ export function SecretaryBeneficiariesPage() {
               >
                 + إضافة فرد عائلة
               </button>
-              <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white sm:col-span-2">
+              <SubmitButton busy={createLock.busy} className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white sm:col-span-2">
                 حفظ التسجيل
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -947,9 +976,9 @@ export function SecretaryBeneficiariesPage() {
                 value={editDob}
                 onChange={(e) => setEditDob(e.target.value)}
               />
-              <button type="submit" className="rounded-lg bg-violet-600 py-2 text-white sm:col-span-2">
+              <SubmitButton busy={editLock.busy} className="rounded-lg bg-violet-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل المستفيد
-              </button>
+              </SubmitButton>
               <button type="button" onClick={() => void onRecalc()} className="rounded-lg border border-white/20 px-3 py-2 text-xs sm:col-span-2">
                 إعادة تصنيف تلقائية
               </button>
@@ -1000,6 +1029,20 @@ export function SecretaryBeneficiariesPage() {
                 value={profIncome}
                 onChange={(e) => setProfIncome(e.target.value)}
               />
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span className="text-[11px] text-white/55">حالة السكن</span>
+                <select
+                  className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={profHousingStatus}
+                  onChange={(e) => setProfHousingStatus(e.target.value)}
+                >
+                  <option value="">— بدون تغيير —</option>
+                  <option value="owned">ملك</option>
+                  <option value="rented">إيجار</option>
+                  <option value="hosted">ضيافة</option>
+                  <option value="unstable">غير مستقر</option>
+                </select>
+              </label>
               <button type="submit" className="rounded-lg bg-sky-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل الأسرة
               </button>

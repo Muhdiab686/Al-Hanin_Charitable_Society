@@ -23,14 +23,11 @@ class AppNotificationService
             return;
         }
 
+        // اعتمد عمود users.role فقط — لا تستخدم hasAnyRole هنا حتى لا تُرسل إشعارات الأدوار
+        // الإدارية بالخطأ إلى مستفيدين/متبرعين إذا بقيت أدوار Spatie قديمة أو متعارضة.
         $users = User::query()
-            ->get()
-            ->filter(function (User $user) use ($roles): bool {
-                $role = (string) $user->getRawOriginal('role');
-
-                return in_array($role, $roles, true) || $user->hasAnyRole($roles);
-            })
-            ->values();
+            ->whereIn('role', $roles)
+            ->get();
 
         $this->notifyUsers($users, $title, $message, $actionUrl, $meta);
     }

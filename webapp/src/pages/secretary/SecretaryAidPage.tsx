@@ -98,14 +98,17 @@ export function SecretaryAidPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-white">طلبات المساعدة</h2>
+            <h2 className="text-base font-semibold text-white">طلبات المساعدة الطبية</h2>
             <p className="mt-1 text-xs text-white/50">
+              تظهر هنا طلبات العمليات والوصفات الطبية فقط. الدعم المعيشي والعينية عند أمين المستودع.
+            </p>
+            <p className="mt-1 text-xs text-white/45">
               {total > 0 ? (
                 <>
                   إجمالي {total} طلباً — عرض الصفحة {page} من {lastPage}
                 </>
               ) : loading ? null : (
-                <>لا طلبات في هذه الصفحة.</>
+                <>لا طلبات طبية في هذه الصفحة.</>
               )}
             </p>
           </div>

@@ -2,6 +2,9 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import { useAuth } from '../../auth/useAuth'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
+import { formatDateTimeAr } from '../../lib/dateTime'
 
 function statusAr(s: string): string {
   if (s === 'scheduled') {
@@ -24,6 +27,7 @@ export function DoctorAppointmentsPage() {
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const examLock = useSubmitLock()
 
   const [showExamDialog, setShowExamDialog] = useState(false)
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
@@ -105,21 +109,23 @@ export function DoctorAppointmentsPage() {
       return
     }
 
-    try {
-      await api.createMedicalRecord({
-        clinic_appointment_id: Number(selectedAppointment.id),
-        diagnosis: diagnosis.trim(),
-        tests_result: labRequest.trim() ? `طلب تحليل: ${labRequest.trim()}` : null,
-        prescription: prescription.trim() ? prescription.trim() : null,
-        prescription_cost: prescriptionCost.trim() ? Number(prescriptionCost) : null,
-        notes: notes.trim() ? notes.trim() : null,
-      })
-      setMsg('تم حفظ نتيجة الفحص والتشخيص والوصفة.')
-      setShowExamDialog(false)
-      await loadAppointments()
-    } catch (e) {
-      setErr(extractErrorMessage(e, 'فشل حفظ نتيجة الفحص'))
-    }
+    await examLock.run(async () => {
+      try {
+        await api.createMedicalRecord({
+          clinic_appointment_id: Number(selectedAppointment.id),
+          diagnosis: diagnosis.trim(),
+          tests_result: labRequest.trim() ? `طلب تحليل: ${labRequest.trim()}` : null,
+          prescription: prescription.trim() ? prescription.trim() : null,
+          prescription_cost: prescriptionCost.trim() ? Number(prescriptionCost) : null,
+          notes: notes.trim() ? notes.trim() : null,
+        })
+        setMsg('تم حفظ نتيجة الفحص والتشخيص والوصفة.')
+        setShowExamDialog(false)
+        await loadAppointments()
+      } catch (e) {
+        setErr(extractErrorMessage(e, 'فشل حفظ نتيجة الفحص'))
+      }
+    })
   }
 
   return (
@@ -191,7 +197,9 @@ export function DoctorAppointmentsPage() {
                     <tr key={String(a.id)} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/12' : ''}`}>
                       <td className="px-3 py-2 font-mono">#{String(a.id)}</td>
                       <td className="px-3 py-2">{String(ben?.name ?? '—')}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{String(a.scheduled_at ?? '—')}</td>
+                      <td className="whitespace-nowrap px-3 py-2 leading-snug">
+                        {formatDateTimeAr(a.scheduled_at as string | undefined)}
+                      </td>
                       <td className="px-3 py-2">{statusAr(st)}</td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
@@ -278,9 +286,9 @@ export function DoctorAppointmentsPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
-              <button type="submit" className="sm:col-span-2 rounded-lg bg-emerald-600 py-2.5 font-medium text-white">
+              <SubmitButton busy={examLock.busy} className="sm:col-span-2 rounded-lg bg-emerald-600 py-2.5 font-medium text-white">
                 حفظ السجل وإنهاء الموعد
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>

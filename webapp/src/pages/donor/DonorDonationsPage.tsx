@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { labelAidTypeAr } from '../../lib/operationalLabels'
 
 const PAYMENT_METHODS = [
@@ -45,6 +47,9 @@ export function DonorDonationsPage() {
   const [urgentCases, setUrgentCases] = useState<Record<string, unknown>[]>([])
   const [urgentDonateId, setUrgentDonateId] = useState<number | null>(null)
   const [urgentAmount, setUrgentAmount] = useState('50')
+  const donateLock = useSubmitLock()
+  const campaignDonateLock = useSubmitLock()
+  const urgentDonateLock = useSubmitLock()
 
   const totalGiven = useMemo(() => {
     return rows.reduce((sum, row) => sum + Number(row.cash_amount ?? 0), 0)
@@ -85,39 +90,41 @@ export function DonorDonationsPage() {
     e.preventDefault()
     setErr(null)
     setMsg(null)
-    try {
-      if (paymentMethod === 'card') {
-        const checkout = await api.createStripeCheckout({
-          amount: Number(amount),
-          purpose: purpose.trim() || undefined,
-          show_donor_name: showDonorName,
-          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
-        })
-        window.location.href = checkout.checkout_url
-        return
-      }
+    await donateLock.run(async () => {
+      try {
+        if (paymentMethod === 'card') {
+          const checkout = await api.createStripeCheckout({
+            amount: Number(amount),
+            purpose: purpose.trim() || undefined,
+            show_donor_name: showDonorName,
+            donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+          })
+          window.location.href = checkout.checkout_url
+          return
+        }
 
-      await api.createDonation({
-        type: 'cash',
-        channel: 'web',
-        cash_amount: Number(amount),
-        purpose: purpose.trim() || null,
-        show_donor_name: showDonorName,
-        donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
-        pledge_frequency: frequency,
-        notes: [
-          notes.trim() || null,
-          `طريقة الدفع: ${PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? paymentMethod}`,
-        ]
-          .filter(Boolean)
-          .join(' | '),
-      })
-      setMsg('تم تسجيل التبرع بنجاح.')
-      setShowDonateDialog(false)
-      await load()
-    } catch (e) {
-      setErr(extractErrorMessage(e, 'فشل تسجيل التبرع'))
-    }
+        await api.createDonation({
+          type: 'cash',
+          channel: 'web',
+          cash_amount: Number(amount),
+          purpose: purpose.trim() || null,
+          show_donor_name: showDonorName,
+          donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
+          pledge_frequency: frequency,
+          notes: [
+            notes.trim() || null,
+            `طريقة الدفع: ${PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? paymentMethod}`,
+          ]
+            .filter(Boolean)
+            .join(' | '),
+        })
+        setMsg('تم تسجيل التبرع بنجاح.')
+        setShowDonateDialog(false)
+        await load()
+      } catch (e) {
+        setErr(extractErrorMessage(e, 'فشل تسجيل التبرع'))
+      }
+    })
   }
 
   async function onDonateCampaign(e: FormEvent) {
@@ -129,35 +136,37 @@ export function DonorDonationsPage() {
       return
     }
     const campaign = campaigns.find((c) => String(c.id) === campaignId)
-    try {
-      if (paymentMethod === 'card') {
-        const checkout = await api.createStripeCheckout({
-          amount: Number(amount),
-          purpose: campaign ? String(campaign.title ?? 'حملة') : purpose.trim() || undefined,
+    await campaignDonateLock.run(async () => {
+      try {
+        if (paymentMethod === 'card') {
+          const checkout = await api.createStripeCheckout({
+            amount: Number(amount),
+            purpose: campaign ? String(campaign.title ?? 'حملة') : purpose.trim() || undefined,
+            campaign_id: campaign ? Number(campaign.id) : undefined,
+            show_donor_name: showDonorName,
+            donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+          })
+          window.location.href = checkout.checkout_url
+          return
+        }
+        await api.createDonation({
+          type: 'cash',
+          channel: 'web',
+          cash_amount: Number(amount),
+          purpose: campaign ? `حملة: ${String(campaign.title ?? '')}` : purpose.trim() || null,
           campaign_id: campaign ? Number(campaign.id) : undefined,
           show_donor_name: showDonorName,
-          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+          donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
+          pledge_frequency: frequency,
+          notes: `تبرع مباشر لحملة محددة${campaign ? ` (#${String(campaign.id ?? '')})` : ''}`,
         })
-        window.location.href = checkout.checkout_url
-        return
+        setMsg('تم التبرع للحملة بنجاح.')
+        setShowCampaignDonateDialog(false)
+        await load()
+      } catch (e) {
+        setErr(extractErrorMessage(e, 'فشل تبرع الحملة'))
       }
-      await api.createDonation({
-        type: 'cash',
-        channel: 'web',
-        cash_amount: Number(amount),
-        purpose: campaign ? `حملة: ${String(campaign.title ?? '')}` : purpose.trim() || null,
-        campaign_id: campaign ? Number(campaign.id) : undefined,
-        show_donor_name: showDonorName,
-        donor_name: showDonorName ? donorName.trim() || 'متبرع' : 'متبرع مجهول',
-        pledge_frequency: frequency,
-        notes: `تبرع مباشر لحملة محددة${campaign ? ` (#${String(campaign.id ?? '')})` : ''}`,
-      })
-      setMsg('تم التبرع للحملة بنجاح.')
-      setShowCampaignDonateDialog(false)
-      await load()
-    } catch (e) {
-      setErr(extractErrorMessage(e, 'فشل تبرع الحملة'))
-    }
+    })
   }
 
   async function openReceiptDialog(donation: Record<string, unknown>) {
@@ -246,17 +255,19 @@ export function DonorDonationsPage() {
                       e.preventDefault()
                       setMsg(null)
                       setErr(null)
-                      try {
-                        const checkout = await api.createStripeCheckout({
-                          amount: Number(urgentAmount),
-                          purpose: `حالة طارئة: ${String(r.public_title ?? '')} (#${String(r.id)})`,
-                          show_donor_name: showDonorName,
-                          donor_name: showDonorName ? donorName.trim() || undefined : undefined,
-                        })
-                        window.location.href = checkout.checkout_url
-                      } catch (ex) {
-                        setErr(extractErrorMessage(ex, 'فشل التحويل إلى الدفع الإلكتروني'))
-                      }
+                      await urgentDonateLock.run(async () => {
+                        try {
+                          const checkout = await api.createStripeCheckout({
+                            amount: Number(urgentAmount),
+                            purpose: `حالة طارئة: ${String(r.public_title ?? '')} (#${String(r.id)})`,
+                            show_donor_name: showDonorName,
+                            donor_name: showDonorName ? donorName.trim() || undefined : undefined,
+                          })
+                          window.location.href = checkout.checkout_url
+                        } catch (ex) {
+                          setErr(extractErrorMessage(ex, 'فشل التحويل إلى الدفع الإلكتروني'))
+                        }
+                      })
                     }}
                   >
                     <label className="flex flex-col gap-1">
@@ -267,9 +278,9 @@ export function DonorDonationsPage() {
                         onChange={(e) => setUrgentAmount(e.target.value)}
                       />
                     </label>
-                    <button type="submit" className="rounded-lg bg-amber-600 px-4 py-2 text-white">
+                    <SubmitButton busy={urgentDonateLock.busy} className="rounded-lg bg-amber-600 px-4 py-2 text-white">
                       الدفع الإلكتروني
-                    </button>
+                    </SubmitButton>
                     <button
                       type="button"
                       className="rounded-lg border border-white/20 px-3 py-2 text-white/80"
@@ -446,9 +457,9 @@ export function DonorDonationsPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
-              <button type="submit" className="sm:col-span-2 rounded-lg bg-rose-600 py-2.5 font-medium text-white">
+              <SubmitButton busy={donateLock.busy} className="sm:col-span-2 rounded-lg bg-rose-600 py-2.5 font-medium text-white">
                 {paymentMethod === 'card' ? 'الانتقال إلى Stripe' : 'تنفيذ التبرع'}
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -521,9 +532,9 @@ export function DonorDonationsPage() {
                 <option value="monthly">شهري</option>
                 <option value="yearly">سنوي</option>
               </select>
-              <button type="submit" className="sm:col-span-2 rounded-lg bg-fuchsia-600 py-2.5 font-medium text-white">
+              <SubmitButton busy={campaignDonateLock.busy} className="sm:col-span-2 rounded-lg bg-fuchsia-600 py-2.5 font-medium text-white">
                 {paymentMethod === 'card' ? 'الدفع عبر Stripe' : 'تبرع للحملة'}
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>

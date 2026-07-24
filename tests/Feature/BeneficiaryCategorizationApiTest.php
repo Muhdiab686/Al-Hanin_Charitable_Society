@@ -25,13 +25,14 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_beneficiary_is_auto_classified_on_create(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $response = $this->postJson('/api/v1/beneficiaries', [
             'family' => [
                 'head_name' => 'Family Head',
                 'members_count' => 6,
+                'housing_status' => 'rented',
                 'monthly_income' => 120,
                 'enrollment_status' => 'pending_board',
             ],
@@ -40,7 +41,7 @@ class BeneficiaryCategorizationApiTest extends TestCase
                 'name' => 'Beneficiary A',
             ],
         ], [
-            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
+            'Authorization' => 'Bearer '.$recordingSecretary->createToken('s')->plainTextToken,
         ]);
 
         $response->assertCreated();
@@ -50,9 +51,9 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_updating_family_profile_recalculates_category(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
-        $token = $secretary->createToken('s')->plainTextToken;
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $recordingSecretary->createToken('s')->plainTextToken;
 
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Approved,
@@ -79,9 +80,9 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_can_update_category_rule_and_recalculate_specific_beneficiary(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
-        $token = $secretary->createToken('s')->plainTextToken;
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $recordingSecretary->createToken('s')->plainTextToken;
 
         $healthCategory = Category::query()->where('name', 'health')->firstOrFail();
 
@@ -108,7 +109,7 @@ class BeneficiaryCategorizationApiTest extends TestCase
         AidRequest::factory()->create([
             'beneficiary_id' => $beneficiary->id,
             'created_by' => User::factory()->create()->id,
-            'type' => 'medical_prescription',
+            'type' => 'surgery',
             'status' => 'approved',
         ]);
 

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AidRequestController;
 use App\Http\Controllers\Api\AppointmentController;
+use App\Http\Controllers\Api\Beneficiary\BeneficiaryAidWalletController;
 use App\Http\Controllers\Api\Beneficiary\BeneficiaryDashboardController;
 use App\Http\Controllers\Api\Beneficiary\BeneficiaryOnboardingController;
 use App\Http\Controllers\Api\BeneficiaryMedicalWalletController;
@@ -22,4 +23,5 @@ Route::prefix('v1/beneficiary')->middleware(['auth:sanctum', 'role:beneficiary']
 
     Route::get('/medical-records', [MedicalRecordController::class, 'index']);
     Route::get('/medical-wallet', [BeneficiaryMedicalWalletController::class, 'showSelf']);
+    Route::get('/aid-wallet', [BeneficiaryAidWalletController::class, 'show']);
 });

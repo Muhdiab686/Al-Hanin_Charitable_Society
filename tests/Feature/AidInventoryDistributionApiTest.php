@@ -88,7 +88,7 @@ class AidInventoryDistributionApiTest extends TestCase
 
     public function test_allocation_depleting_stock_marks_inventory_item_distributed(): void
     {
-        $aidRequest = $this->approvedAidRequest('medical_prescription');
+        $aidRequest = $this->approvedAidRequest('surgery');
 
         $item = InventoryItem::factory()->create([
             'quantity' => 5,

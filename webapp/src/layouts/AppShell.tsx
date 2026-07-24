@@ -126,6 +126,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
     title: 'مساحة أمين المستودع',
     links: [
       { to: '/app/storekeeper', label: 'الرئيسية' },
+      { to: '/app/storekeeper/aid', label: 'الدعم المعيشي والعينية' },
       { to: '/app/storekeeper/inventory', label: 'المستودع والمواد' },
       { to: '/app/storekeeper/notifications', label: 'الإشعارات' },
     ],
@@ -164,6 +165,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
       { to: '/app/beneficiary', label: 'الرئيسية' },
       { to: '/app/beneficiary/aid', label: 'طلبات المساعدة' },
       { to: '/app/beneficiary/appointments', label: 'المواعيد' },
+      { to: '/app/beneficiary/wallet', label: 'محفظتي' },
       { to: '/app/beneficiary/medical', label: 'السجلات الطبية' },
       { to: '/app/beneficiary/notifications', label: 'الإشعارات' },
     ],
