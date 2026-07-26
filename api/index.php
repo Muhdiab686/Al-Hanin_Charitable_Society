@@ -1,8 +1,9 @@
 <?php
 
-error_reporting(E_ALL & ~E_DEPRECATED);
-
+// إجبار السيرفر على عرض جميع الأخطاء القاتلة
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 putenv('APP_DEBUG=true');
-error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 
 require __DIR__ . '/../public/index.php';
