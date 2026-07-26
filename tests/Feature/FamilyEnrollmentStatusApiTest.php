@@ -86,11 +86,17 @@ class FamilyEnrollmentStatusApiTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_secretary_can_submit_draft_and_withdraw_pending_board(): void
+    public function test_recording_secretary_can_submit_draft_and_withdraw_pending_board(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('test-device')->plainTextToken;
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 
         $draftFamily = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Draft,
@@ -115,15 +121,20 @@ class FamilyEnrollmentStatusApiTest extends TestCase
             ->assertJsonPath('family.enrollment_status', 'draft');
     }
 
-    public function test_secretary_can_resubmit_rejected_to_pending_board(): void
+    public function test_recording_secretary_can_resubmit_rejected_to_pending_board(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Rejected,
         ]);
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $this->patchJson(
             '/api/v1/families/'.$family->id.'/enrollment-status',
@@ -152,13 +163,18 @@ class FamilyEnrollmentStatusApiTest extends TestCase
 
     public function test_cannot_change_finalized_enrollment_without_valid_transition(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Approved,
         ]);
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $this->patchJson(
             '/api/v1/families/'.$family->id.'/enrollment-status',

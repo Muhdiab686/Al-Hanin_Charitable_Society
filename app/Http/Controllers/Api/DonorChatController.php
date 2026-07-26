@@ -109,12 +109,12 @@ class DonorChatController extends Controller
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:5000'],
-            'recipient_role' => ['required', 'string', Rule::enum(DonorChatRecipient::class)],
+            'recipient_role' => ['sometimes', 'nullable', 'string', Rule::enum(DonorChatRecipient::class)],
         ]);
 
         $message = DonorChatMessage::query()->create([
             'donor_id' => $user->id,
-            'recipient_role' => $validated['recipient_role'],
+            'recipient_role' => $validated['recipient_role'] ?? DonorChatRecipient::GeneralSecretary->value,
             'sender_id' => $user->id,
             'body' => $validated['body'],
         ]);

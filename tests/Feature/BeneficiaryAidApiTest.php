@@ -20,12 +20,17 @@ class BeneficiaryAidApiTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
     }
 
-    public function test_secretary_can_create_beneficiary_with_family(): void
+    public function test_recording_secretary_can_create_beneficiary_with_family(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $response = $this->postJson('/api/v1/beneficiaries', [
             'family' => [
@@ -33,6 +38,7 @@ class BeneficiaryAidApiTest extends TestCase
                 'phone' => '0999999999',
                 'address' => 'Damascus',
                 'members_count' => 4,
+                'housing_status' => 'rented',
                 'monthly_income' => 100.50,
             ],
             'beneficiary' => [
@@ -49,17 +55,23 @@ class BeneficiaryAidApiTest extends TestCase
             ->assertJsonPath('beneficiary.family.enrollment_status', 'pending_board');
     }
 
-    public function test_secretary_can_create_family_as_enrollment_draft(): void
+    public function test_recording_secretary_can_create_family_as_enrollment_draft(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $response = $this->postJson('/api/v1/beneficiaries', [
             'family' => [
                 'head_name' => 'Draft Head',
                 'members_count' => 3,
+                'housing_status' => 'owned',
                 'enrollment_status' => 'draft',
             ],
             'beneficiary' => [
@@ -72,6 +84,18 @@ class BeneficiaryAidApiTest extends TestCase
             ->assertJsonPath('beneficiary.family.enrollment_status', 'draft');
     }
 
+    public function test_clinic_secretary_cannot_create_beneficiary_record(): void
+    {
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
+        $token = $secretary->createToken('test-device')->plainTextToken;
+
+        $this->postJson('/api/v1/beneficiaries', [
+            'family' => ['head_name' => 'Head', 'members_count' => 2, 'housing_status' => 'rented'],
+            'beneficiary' => ['national_id' => '32345678901', 'name' => 'No Access'],
+        ], ['Authorization' => 'Bearer '.$token])->assertForbidden();
+    }
+
     public function test_beneficiary_cannot_create_beneficiary_record(): void
     {
         $beneficiaryUser = User::factory()->create(['role' => UserRole::Beneficiary->value]);
@@ -79,7 +103,7 @@ class BeneficiaryAidApiTest extends TestCase
         $token = $beneficiaryUser->createToken('test-device')->plainTextToken;
 
         $this->postJson('/api/v1/beneficiaries', [
-            'family' => ['head_name' => 'Head', 'members_count' => 2],
+            'family' => ['head_name' => 'Head', 'members_count' => 2, 'housing_status' => 'rented'],
             'beneficiary' => ['national_id' => '22345678901', 'name' => 'No Access'],
         ], ['Authorization' => 'Bearer '.$token])->assertForbidden();
     }

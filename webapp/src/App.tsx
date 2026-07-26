@@ -40,7 +40,10 @@ import { BeneficiaryAidPage } from './pages/beneficiary/BeneficiaryAidPage'
 import { BeneficiaryAppointmentsPage } from './pages/beneficiary/BeneficiaryAppointmentsPage'
 import { BeneficiaryHomePage } from './pages/beneficiary/BeneficiaryHomePage'
 import { BeneficiaryMedicalPage } from './pages/beneficiary/BeneficiaryMedicalPage'
+<<<<<<< HEAD
 import { BeneficiaryProfilePage } from './pages/beneficiary/BeneficiaryProfilePage'
+=======
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 import { BeneficiaryWalletPage } from './pages/beneficiary/BeneficiaryWalletPage'
 import { DoctorAppointmentsPage } from './pages/doctor/DoctorAppointmentsPage'
 import { DoctorHomePage } from './pages/doctor/DoctorHomePage'
@@ -147,13 +150,8 @@ export default function App() {
           >
             <Route index element={<SecretaryHomePage />} />
             <Route path="aid-requests" element={<SecretaryAidPage />} />
-            <Route path="aid-plans" element={<SecretaryAidPlansPage />} />
-            <Route path="categories" element={<SecretaryCategoriesPage />} />
             <Route path="clinic" element={<SecretaryClinicPage />} />
             <Route path="medical" element={<SecretaryMedicalPage />} />
-            <Route path="volunteers" element={<SecretaryVolunteersPage />} />
-            <Route path="campaign-reporting" element={<CampaignReportingPage />} />
-            <Route path="qr" element={<SecretaryQrPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
@@ -280,9 +278,9 @@ export default function App() {
             }
           >
             <Route index element={<BeneficiaryHomePage />} />
-            <Route path="profile" element={<BeneficiaryProfilePage />} />
             <Route path="aid" element={<BeneficiaryAidPage />} />
             <Route path="appointments" element={<BeneficiaryAppointmentsPage />} />
+            <Route path="wallet" element={<BeneficiaryWalletPage />} />
             <Route path="medical" element={<BeneficiaryMedicalPage />} />
             <Route path="wallet" element={<BeneficiaryWalletPage />} />
             <Route path="notifications" element={<NotificationsPage />} />

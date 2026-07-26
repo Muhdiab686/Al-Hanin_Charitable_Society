@@ -87,11 +87,14 @@ class BeneficiaryController extends Controller
             $family = Family::query()->create([
                 'family_code' => 'FAM-'.now()->format('YmdHis').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT),
                 'head_name' => $validated['family']['head_name'],
+                'full_family_name' => $validated['family']['head_name'],
                 'phone' => $validated['family']['phone'] ?? null,
                 'address' => $validated['family']['address'] ?? null,
                 'members_count' => $validated['family']['members_count'],
                 'monthly_income' => $validated['family']['monthly_income'] ?? 0,
+                'housing_status' => $validated['family']['housing_status'],
                 'enrollment_status' => $enrollmentStatus,
+                'profile_completed_at' => now(),
             ]);
 
             $relationship = isset($validated['beneficiary']['family_relationship'])

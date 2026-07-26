@@ -115,7 +115,8 @@ class BeneficiaryOnboardingController extends Controller
             'has_profile' => true,
             'beneficiary_id' => $beneficiary->id,
             'family_id' => $family?->id,
-            'needs_completion' => $family?->profile_completed_at === null,
+            // الملف يُكمَل من أمين السر عند التسجيل — لا يُطلب من المستفيد إكماله.
+            'needs_completion' => false,
             'enrollment_status' => $family?->enrollment_status?->value,
             'follow_up_status' => $family?->follow_up_status,
             'family' => $family,

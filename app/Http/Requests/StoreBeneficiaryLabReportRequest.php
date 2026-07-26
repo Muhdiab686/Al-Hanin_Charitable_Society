@@ -20,7 +20,12 @@ class StoreBeneficiaryLabReportRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'findings' => ['nullable', 'string', 'max:8000'],
-            'attachment' => ['nullable', 'file', 'max:8192', 'mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx'],
+            'attachment' => [
+                'nullable',
+                'file',
+                'max:10240',
+                'mimetypes:application/pdf,image/jpeg,image/png,image/gif,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ],
         ];
     }
 }

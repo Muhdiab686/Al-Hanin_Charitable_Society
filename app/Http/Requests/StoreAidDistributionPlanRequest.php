@@ -21,7 +21,13 @@ class StoreAidDistributionPlanRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
+<<<<<<< HEAD
             'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription', 'food_basket', 'stationery'])],
+=======
+            'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'surgery', 'medical_prescription'])],
+            'item_label' => ['nullable', 'string', 'max:255'],
+            'inventory_item_id' => ['nullable', 'integer', 'exists:inventory_items,id'],
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
             'campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
             'distribution_date' => ['required', 'date'],
             'distribution_frequency' => ['nullable', Rule::in(['once', 'quarterly', 'yearly'])],
@@ -55,9 +61,13 @@ class StoreAidDistributionPlanRequest extends FormRequest
                 $validator->errors()->add('total_amount', __('Total amount is required for financial plans.'));
             }
 
+<<<<<<< HEAD
             $unitBasedTypes = ['special_item', 'medical_prescription', 'food_basket', 'stationery'];
 
             if (in_array($aidType, $unitBasedTypes, true) && ! $autoUnits && ! $this->filled('total_units')) {
+=======
+            if (in_array($aidType, ['special_item', 'surgery', 'medical_prescription'], true) && ! $this->filled('total_units')) {
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
                 $validator->errors()->add('total_units', __('Total units are required for item-based plans.'));
             }
         });

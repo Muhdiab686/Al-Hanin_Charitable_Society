@@ -87,6 +87,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'donations.create',
                 'donations.view',
                 'aid.distribute',
+                'aid.request.review',
             ],
             UserRole::Volunteer->value => [
                 'aid.distribute',

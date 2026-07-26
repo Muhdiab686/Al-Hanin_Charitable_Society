@@ -104,9 +104,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/aid-requests', [AidRequestController::class, 'store'])
         ->middleware('role_or_permission:beneficiary|aid.request.create');
     Route::patch('/aid-requests/{aidRequest}/review', [AidRequestController::class, 'review'])
-        ->middleware('permission:aid.request.review');
+        ->middleware('role_or_permission:storekeeper|aid.request.review');
     Route::patch('/aid-requests/{aidRequest}/publish-for-donors', [AidRequestController::class, 'publishForDonors'])
-        ->middleware('permission:aid.request.review');
+        ->middleware('role_or_permission:storekeeper|aid.request.review');
     Route::get('/published-aid-requests', [PublishedAidRequestController::class, 'index'])
         ->middleware('role:donor');
     Route::post('/aid-requests/{aidRequest}/inventory-distributions', [AidRequestController::class, 'storeInventoryDistribution'])
@@ -116,7 +116,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/aid-distribution-plans', [AidDistributionPlanController::class, 'index'])
         ->middleware('permission:aid.distribute|aid.request.review');
+<<<<<<< HEAD
     Route::post('/aid-distribution-plans/candidates', [AidDistributionPlanController::class, 'candidates'])
+=======
+    Route::get('/aid-distribution-plans/{aidDistributionPlan}', [AidDistributionPlanController::class, 'show'])
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
         ->middleware('permission:aid.distribute|aid.request.review');
     Route::post('/aid-distribution-plans', [AidDistributionPlanController::class, 'store'])
         ->middleware('permission:aid.distribute|aid.request.review');
@@ -156,7 +160,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->middleware('permission:donations.create');
 
     Route::get('/inventory-items', [InventoryController::class, 'index'])
-        ->middleware('permission:inventory.view');
+        ->middleware('permission:inventory.view|aid.distribute|aid.request.review');
     Route::post('/inventory-items/{inventoryItem}/remove', [InventoryController::class, 'remove'])
         ->middleware('permission:inventory.manage');
 
@@ -169,11 +173,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/appointments', [AppointmentController::class, 'index'])
         ->middleware('role_or_permission:secretary|appointments.view|appointments.manage');
+    Route::get('/appointments/doctors', [AppointmentController::class, 'doctorsCatalog'])
+        ->middleware('role:beneficiary');
+    Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
+        ->middleware('role_or_permission:secretary|appointments.view|appointments.manage|beneficiary');
     Route::post('/appointments', [AppointmentController::class, 'store'])
         ->middleware('role_or_permission:secretary|appointments.manage');
     Route::post('/appointments/request', [AppointmentController::class, 'requestAppointment'])
-        ->middleware('role:beneficiary');
-    Route::get('/appointments/doctors', [AppointmentController::class, 'doctorsCatalog'])
         ->middleware('role:beneficiary');
     Route::patch('/appointments/{appointment}/approve', [AppointmentController::class, 'approve'])
         ->middleware('role_or_permission:secretary|appointments.manage');

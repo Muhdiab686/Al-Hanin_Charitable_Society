@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\HousingStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateFamilyProfileRequest extends FormRequest
 {
@@ -23,6 +25,7 @@ class UpdateFamilyProfileRequest extends FormRequest
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
             'members_count' => ['sometimes', 'integer', 'min:1'],
             'monthly_income' => ['sometimes', 'numeric', 'min:0'],
+            'housing_status' => ['sometimes', 'nullable', 'string', Rule::enum(HousingStatus::class)],
         ];
     }
 }

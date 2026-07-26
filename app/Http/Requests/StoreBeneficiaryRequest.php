@@ -4,7 +4,11 @@ namespace App\Http\Requests;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\FamilyRelationship;
+<<<<<<< HEAD
 use App\Enums\HealthStatus;
+=======
+use App\Enums\HousingStatus;
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -32,6 +36,7 @@ class StoreBeneficiaryRequest extends FormRequest
             'family.address' => ['nullable', 'string', 'max:500'],
             'family.members_count' => ['required', 'integer', 'min:1'],
             'family.monthly_income' => ['nullable', 'numeric', 'min:0'],
+            'family.housing_status' => ['required', 'string', Rule::enum(HousingStatus::class)],
             'family.enrollment_status' => [
                 'nullable',
                 'string',

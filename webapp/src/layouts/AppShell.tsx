@@ -129,6 +129,7 @@ const shells: Record<ShellVariant, ShellBlock> = {
     title: 'مساحة أمين المستودع',
     links: [
       { to: '/app/storekeeper', label: 'الرئيسية' },
+      { to: '/app/storekeeper/aid', label: 'الدعم المعيشي والعينية' },
       { to: '/app/storekeeper/inventory', label: 'المستودع والمواد' },
       { to: '/app/storekeeper/notifications', label: 'الإشعارات' },
     ],

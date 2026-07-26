@@ -37,6 +37,7 @@ class AidRequestReviewApiTest extends TestCase
         $aidRequest = AidRequest::factory()->create([
             'beneficiary_id' => $beneficiary->id,
             'created_by' => $beneficiaryUser->id,
+            'type' => 'surgery',
             'status' => 'pending',
         ]);
 
@@ -111,6 +112,65 @@ class AidRequestReviewApiTest extends TestCase
             '/api/v1/aid-requests/'.$aidRequest->id.'/review',
             ['decision' => 'rejected'],
             ['Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken]
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['aid_request']);
+    }
+
+    public function test_secretary_index_shows_only_medical_aid_requests(): void
+    {
+        [$medical] = $this->createPendingAidRequest();
+
+        $livelihood = AidRequest::factory()->create([
+            'type' => 'urgent_financial',
+            'status' => 'pending',
+        ]);
+
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
+
+        $response = $this->getJson('/api/v1/aid-requests', [
+            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
+        ]);
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($medical->id, $ids);
+        $this->assertNotContains($livelihood->id, $ids);
+    }
+
+    public function test_storekeeper_can_review_livelihood_but_not_medical(): void
+    {
+        [$medical] = $this->createPendingAidRequest();
+
+        $beneficiaryUser = User::factory()->create(['role' => UserRole::Beneficiary->value]);
+        $beneficiaryUser->syncRoles([UserRole::Beneficiary->value]);
+        $beneficiary = Beneficiary::factory()->create(['user_id' => $beneficiaryUser->id]);
+        $livelihood = AidRequest::factory()->create([
+            'beneficiary_id' => $beneficiary->id,
+            'created_by' => $beneficiaryUser->id,
+            'type' => 'urgent_financial',
+            'status' => 'pending',
+        ]);
+        ApprovalRequest::query()->create([
+            'aid_request_id' => $livelihood->id,
+            'decision' => 'pending',
+        ]);
+
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+        $token = $storekeeper->createToken('sk')->plainTextToken;
+
+        $this->patchJson(
+            '/api/v1/aid-requests/'.$livelihood->id.'/review',
+            ['decision' => 'approved'],
+            ['Authorization' => 'Bearer '.$token]
+        )->assertOk()
+            ->assertJsonPath('aid_request.status', 'approved');
+
+        $this->patchJson(
+            '/api/v1/aid-requests/'.$medical->id.'/review',
+            ['decision' => 'approved'],
+            ['Authorization' => 'Bearer '.$token]
         )->assertUnprocessable()
             ->assertJsonValidationErrors(['aid_request']);
     }

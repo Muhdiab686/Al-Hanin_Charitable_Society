@@ -22,7 +22,7 @@ class AidRequestFactory extends Factory
         return [
             'beneficiary_id' => Beneficiary::factory(),
             'created_by' => User::factory(),
-            'type' => $this->faker->randomElement(['urgent_financial', 'special_item', 'medical_prescription']),
+            'type' => $this->faker->randomElement(['urgent_financial', 'special_item', 'surgery']),
             'requested_amount' => $this->faker->randomFloat(2, 0, 5000),
             'description' => $this->faker->sentence(),
             'status' => 'pending',

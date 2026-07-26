@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { badgeClassForAidStatus, labelAidStatusAr, labelAidTypeAr } from '../../lib/operationalLabels'
 
 export function VolunteerAidPage() {
@@ -18,6 +20,9 @@ export function VolunteerAidPage() {
   const [delivAid, setDelivAid] = useState('')
   const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
   const [files, setFiles] = useState<FileList | null>(null)
+  const createLock = useSubmitLock()
+  const distLock = useSubmitLock()
+  const delivLock = useSubmitLock()
 
   const deliveryAllocationOptions = useMemo(() => {
     if (!delivAid) {
@@ -80,47 +85,53 @@ export function VolunteerAidPage() {
     e.preventDefault()
     setMsg(null)
     setErr(null)
-    try {
-      await api.createAidRequest({
-        beneficiary_id: Number(benId),
-        type,
-        description: desc,
-        attachments: files ? Array.from(files) : undefined,
-      })
-      setMsg('تم إنشاء الطلب.')
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل الإنشاء'))
-    }
+    await createLock.run(async () => {
+      try {
+        await api.createAidRequest({
+          beneficiary_id: Number(benId),
+          type,
+          description: desc,
+          attachments: files ? Array.from(files) : undefined,
+        })
+        setMsg('تم إنشاء الطلب.')
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'فشل الإنشاء'))
+      }
+    })
   }
 
   async function onDist(e: FormEvent) {
     e.preventDefault()
     setMsg(null)
     setErr(null)
-    try {
-      await api.postAidInventoryDistribution(Number(aidId), {
-        items: [{ inventory_item_id: Number(invId), quantity: Number(qty) }],
-      })
-      setMsg('تم التوزيع.')
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل'))
-    }
+    await distLock.run(async () => {
+      try {
+        await api.postAidInventoryDistribution(Number(aidId), {
+          items: [{ inventory_item_id: Number(invId), quantity: Number(qty) }],
+        })
+        setMsg('تم التوزيع.')
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'فشل'))
+      }
+    })
   }
 
   async function onDeliv(e: FormEvent) {
     e.preventDefault()
     setMsg(null)
     setErr(null)
-    try {
-      const ids = selectedAllocationIds.map((id) => Number(id)).filter(Boolean)
-      await api.confirmAidDelivery(Number(delivAid), { allocation_ids: ids })
-      setMsg('تم التسليم.')
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل'))
-    }
+    await delivLock.run(async () => {
+      try {
+        const ids = selectedAllocationIds.map((id) => Number(id)).filter(Boolean)
+        await api.confirmAidDelivery(Number(delivAid), { allocation_ids: ids })
+        setMsg('تم التسليم.')
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'فشل'))
+      }
+    })
   }
 
   return (
@@ -191,7 +202,7 @@ export function VolunteerAidPage() {
               onChange={(e) => setType(e.target.value)}
             >
               <option value="special_item">مواد أو عينية خاصة</option>
-              <option value="medical_prescription">وصفة طبيّة / صرف دوائي</option>
+              <option value="surgery">عملية</option>
               <option value="urgent_financial">دعم معيشي عاجل</option>
             </select>
           </label>
@@ -214,9 +225,9 @@ export function VolunteerAidPage() {
               onChange={(e) => setFiles(e.target.files)}
             />
           </label>
-          <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-medium text-white sm:col-span-2">
+          <SubmitButton busy={createLock.busy} className="rounded-lg bg-emerald-600 py-2.5 font-medium text-white sm:col-span-2">
             إرسال الطلب للمراجعة
-          </button>
+          </SubmitButton>
         </form>
       </section>
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -257,7 +268,7 @@ export function VolunteerAidPage() {
             <span className="text-[11px] text-white/55">الكمية</span>
             <input className="w-20 rounded-lg border border-white/15 bg-slate-950/40 px-2 py-2 text-white" value={qty} onChange={(e) => setQty(e.target.value)} />
           </label>
-          <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 text-white">تنفيذ التوزيع</button>
+          <SubmitButton busy={distLock.busy} className="rounded-lg bg-teal-600 px-4 py-2 text-white">تنفيذ التوزيع</SubmitButton>
         </form>
       </section>
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -305,7 +316,7 @@ export function VolunteerAidPage() {
               )}
             </select>
           </label>
-          <button type="submit" className="rounded-lg bg-cyan-600 px-4 py-2 text-white">تأكيد التسليم</button>
+          <SubmitButton busy={delivLock.busy} className="rounded-lg bg-cyan-600 px-4 py-2 text-white">تأكيد التسليم</SubmitButton>
         </form>
       </section>
     </div>

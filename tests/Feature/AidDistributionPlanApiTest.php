@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Enums\FamilyEnrollmentStatus;
+use App\Enums\InventoryItemStatus;
 use App\Enums\UserRole;
 use App\Models\AidDistributionPlan;
+use App\Models\AidInventoryAllocation;
 use App\Models\Beneficiary;
 use App\Models\Campaign;
 use App\Models\Family;
+use App\Models\InventoryItem;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AidDistributionPlanApiTest extends TestCase
@@ -101,7 +105,7 @@ class AidDistributionPlanApiTest extends TestCase
 
         $response = $this->postJson('/api/v1/aid-distribution-plans', [
             'title' => 'Eligible only plan',
-            'aid_type' => 'medical_prescription',
+            'aid_type' => 'surgery',
             'distribution_date' => now()->toDateString(),
             'total_units' => 10,
         ], [
@@ -270,6 +274,7 @@ class AidDistributionPlanApiTest extends TestCase
             ->assertJsonPath('plan.status', 'completed');
     }
 
+<<<<<<< HEAD
     public function test_secretary_can_preview_candidate_families_without_creating_plan(): void
     {
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
@@ -315,6 +320,87 @@ class AidDistributionPlanApiTest extends TestCase
             ->assertJsonPath('plan.eligible_families_count', 1)
             ->assertJsonCount(1, 'plan.lines')
             ->assertJsonPath('plan.lines.0.family_id', $familyA->id);
+=======
+    public function test_executing_in_kind_plan_cycle_deducts_inventory_and_creates_pending_delivery(): void
+    {
+        $storekeeper = User::factory()->create(['role' => UserRole::Storekeeper->value]);
+        $storekeeper->syncRoles([UserRole::Storekeeper->value]);
+
+        $family = Family::factory()->create([
+            'enrollment_status' => FamilyEnrollmentStatus::Approved,
+            'has_direct_income' => false,
+            'aid_paused_at' => null,
+            'qr_token' => null,
+        ]);
+        $beneficiaryUser = User::factory()->create(['role' => UserRole::Beneficiary->value]);
+        $beneficiaryUser->syncRoles([UserRole::Beneficiary->value]);
+        $beneficiary = Beneficiary::factory()->create([
+            'family_id' => $family->id,
+            'user_id' => $beneficiaryUser->id,
+            'is_head_of_family' => true,
+        ]);
+
+        $item = InventoryItem::factory()->create([
+            'name' => 'سلة غذائية',
+            'quantity' => 20,
+            'quantity_remaining' => 20,
+            'status' => InventoryItemStatus::Stored,
+        ]);
+
+        $create = $this->postJson('/api/v1/aid-distribution-plans', [
+            'title' => 'توزيع سلات',
+            'aid_type' => 'special_item',
+            'item_label' => 'سلة غذائية',
+            'inventory_item_id' => $item->id,
+            'distribution_date' => now()->toDateString(),
+            'total_units' => 4,
+        ], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk-fulfill')->plainTextToken,
+        ]);
+
+        $create->assertCreated();
+        $planId = (int) $create->json('plan.id');
+
+        $response = $this->patchJson("/api/v1/aid-distribution-plans/{$planId}/complete-cycle", [
+            'inventory_item_id' => $item->id,
+        ], [
+            'Authorization' => 'Bearer '.$storekeeper->createToken('sk-fulfill-2')->plainTextToken,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('plan.completed_cycles', 1);
+
+        $this->assertDatabaseHas('inventory_items', [
+            'id' => $item->id,
+            'quantity_remaining' => 16,
+        ]);
+
+        $this->assertDatabaseHas('aid_requests', [
+            'beneficiary_id' => $beneficiary->id,
+            'status' => 'approved',
+            'type' => 'special_item',
+        ]);
+
+        $this->assertDatabaseHas('aid_inventory_allocations', [
+            'inventory_item_id' => $item->id,
+            'quantity' => 4,
+            'delivered_at' => null,
+        ]);
+
+        $this->assertNotNull($family->fresh()->qr_token);
+
+        $this->flushHeaders();
+        Sanctum::actingAs($beneficiaryUser);
+
+        $confirm = $this->postJson('/api/v1/beneficiary/aid-deliveries/confirm-by-qr', [
+            'payload' => 'hanin:'.$family->fresh()->qr_token,
+        ]);
+
+        $confirm->assertOk();
+        $this->assertNotNull(
+            AidInventoryAllocation::query()->where('inventory_item_id', $item->id)->value('delivered_at')
+        );
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
     }
 
     public function test_recording_secretary_can_link_distribution_plan_to_campaign(): void

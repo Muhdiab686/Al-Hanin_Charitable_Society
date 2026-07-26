@@ -110,8 +110,8 @@ class BeneficiaryLifecycleApiTest extends TestCase
         AidRequest::query()->create([
             'beneficiary_id' => $beneficiary->id,
             'created_by' => $user->id,
-            'type' => 'medical_prescription',
-            'description' => 'Need medicine support',
+            'type' => 'surgery',
+            'description' => 'Need surgery support',
             'status' => 'pending',
         ]);
         $token = $user->createToken('test')->plainTextToken;
@@ -121,7 +121,7 @@ class BeneficiaryLifecycleApiTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('requested_materials.0.aid_type', 'medical_prescription')
+            ->assertJsonPath('requested_materials.0.aid_type', 'surgery')
             ->assertJsonPath('requested_materials.0.status', 'pending');
     }
 
@@ -148,6 +148,7 @@ class BeneficiaryLifecycleApiTest extends TestCase
                 'phone' => '0599000001',
                 'address' => 'غزة - الرمال',
                 'members_count' => 3,
+                'housing_status' => 'rented',
                 'monthly_income' => 500,
                 'enrollment_status' => 'pending_board',
             ],

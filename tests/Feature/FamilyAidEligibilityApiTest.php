@@ -21,11 +21,17 @@ class FamilyAidEligibilityApiTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
     }
 
-    public function test_secretary_can_pause_and_resume_family_aid_eligibility(): void
+    public function test_recording_secretary_can_pause_and_resume_family_aid_eligibility(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $token = $recordingSecretary->createToken('s')->plainTextToken;
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 
         $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
 
@@ -52,15 +58,20 @@ class FamilyAidEligibilityApiTest extends TestCase
 
     public function test_cannot_pause_without_reason(): void
     {
+<<<<<<< HEAD
         $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+=======
+        $recordingSecretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $recordingSecretary->syncRoles([UserRole::RecordingSecretary->value]);
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
 
         $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
 
         $this->patchJson('/api/v1/families/'.$family->id.'/aid-eligibility', [
             'has_direct_income' => true,
         ], [
-            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
+            'Authorization' => 'Bearer '.$recordingSecretary->createToken('s')->plainTextToken,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['aid_pause_reason']);
     }

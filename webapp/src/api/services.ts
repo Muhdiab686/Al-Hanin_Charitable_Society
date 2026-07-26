@@ -425,11 +425,23 @@ export async function fetchAidDistributionPlans(params?: {
   return data
 }
 
+export async function fetchAidDistributionPlan(planId: number): Promise<{
+  plan: Record<string, unknown>
+  beneficiaries: Record<string, unknown>[]
+}> {
+  const { data } = await apiClient.get<{
+    plan: Record<string, unknown>
+    beneficiaries: Record<string, unknown>[]
+  }>(`${v1}/aid-distribution-plans/${planId}`)
+  return data
+}
+
 export async function createAidDistributionPlan(payload: Record<string, unknown>): Promise<unknown> {
   const { data } = await apiClient.post(`${v1}/aid-distribution-plans`, payload)
   return data
 }
 
+<<<<<<< HEAD
 export type AidDistributionCandidateFamily = {
   family_id: number
   family_code?: string | null
@@ -454,6 +466,16 @@ export async function previewAidDistributionCandidates(
 
 export async function completeAidDistributionPlanCycle(planId: number): Promise<unknown> {
   const { data } = await apiClient.patch(`${v1}/aid-distribution-plans/${planId}/complete-cycle`)
+=======
+export async function completeAidDistributionPlanCycle(
+  planId: number,
+  payload?: { inventory_item_id?: number },
+): Promise<unknown> {
+  const { data } = await apiClient.patch(
+    `${v1}/aid-distribution-plans/${planId}/complete-cycle`,
+    payload ?? {},
+  )
+>>>>>>> 030dea290fe1113156c4c0bf3953d758b3aca194
   return data
 }
 
@@ -576,6 +598,7 @@ export async function fetchAppointments(params?: {
   from?: string
   to?: string
   beneficiary_id?: number
+  doctor_id?: number
   /** scheduled | cancelled | completed */
   status?: string
 }): Promise<Paginated<Record<string, unknown>>> {
@@ -584,6 +607,13 @@ export async function fetchAppointments(params?: {
     { params },
   )
   return data
+}
+
+export async function fetchAppointment(appointmentId: number): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get<{ appointment: Record<string, unknown> }>(
+    `${v1}/appointments/${appointmentId}`,
+  )
+  return data.appointment
 }
 
 export async function createAppointment(payload: {
@@ -931,6 +961,11 @@ export async function fetchBeneficiaryProfileStatus(): Promise<Record<string, un
   return data
 }
 
+export async function fetchBeneficiaryAidWallet(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`${v1}/beneficiary/aid-wallet`)
+  return data
+}
+
 export async function confirmBeneficiaryAidDeliveryByQr(payload: {
   payload: string
   aid_request_id?: number
@@ -964,8 +999,12 @@ export async function fetchOperationalExpenses(params?: {
   return data
 }
 
-export async function fetchCampaigns(): Promise<Paginated<Record<string, unknown>>> {
-  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(`${v1}/campaigns`)
+export async function fetchCampaigns(params?: {
+  page?: number
+  per_page?: number
+  status?: 'active' | 'paused' | 'completed'
+}): Promise<Paginated<Record<string, unknown>>> {
+  const { data } = await apiClient.get<Paginated<Record<string, unknown>>>(`${v1}/campaigns`, { params })
   return data
 }
 

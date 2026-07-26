@@ -127,7 +127,7 @@ export function SecretaryVolunteersPage() {
 
       <p className="text-[13px] leading-relaxed text-white/72">
         لمراجعة تأثير التبرعات والتوعية على مستوى الحملات، استخدم لوحة القياس الموحَّدة مع{' '}
-        <Link to="/app/secretary/campaign-reporting" className="text-violet-200 underline underline-offset-2">
+        <Link to="/app/recording-secretary/campaign-reporting" className="text-violet-200 underline underline-offset-2">
           تقارير الحملات
         </Link>
         .

@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { labelSpoilageCategoryAr } from '../../lib/operationalLabels'
 
 export function StorekeeperDonationsPage() {
@@ -12,6 +14,7 @@ export function StorekeeperDonationsPage() {
   const [category, setCategory] = useState('non_perishable')
   const [expiry, setExpiry] = useState('')
   const [storage, setStorage] = useState('WH-1')
+  const submitLock = useSubmitLock()
 
   async function load() {
     setErr(null)
@@ -31,26 +34,28 @@ export function StorekeeperDonationsPage() {
     e.preventDefault()
     setMsg(null)
     setErr(null)
-    try {
-      await api.createDonation({
-        type: 'in_kind',
-        channel: 'manual',
-        donor_name: 'متبرع عيني',
-        items: [
-          {
-            name: itemName,
-            spoilage_category: category,
-            quantity: Number(qty),
-            expiry_date: expiry.trim() || null,
-            storage_location: storage.trim() || null,
-          },
-        ],
-      })
-      setMsg(`تم تسجيل تبرع عيني (${labelSpoilageCategoryAr(category)}).`)
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل (تحقق من الصلاحيات والبيانات)'))
-    }
+    await submitLock.run(async () => {
+      try {
+        await api.createDonation({
+          type: 'in_kind',
+          channel: 'manual',
+          donor_name: 'متبرع عيني',
+          items: [
+            {
+              name: itemName,
+              spoilage_category: category,
+              quantity: Number(qty),
+              expiry_date: expiry.trim() || null,
+              storage_location: storage.trim() || null,
+            },
+          ],
+        })
+        setMsg(`تم تسجيل تبرع عيني (${labelSpoilageCategoryAr(category)}).`)
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'فشل (تحقق من الصلاحيات والبيانات)'))
+      }
+    })
   }
 
   return (
@@ -121,9 +126,9 @@ export function StorekeeperDonationsPage() {
               onChange={(e) => setStorage(e.target.value)}
             />
           </label>
-          <button type="submit" className="rounded-lg bg-orange-600 px-4 py-2.5 font-medium text-white sm:col-span-2">
+          <SubmitButton busy={submitLock.busy} className="rounded-lg bg-orange-600 px-4 py-2.5 font-medium text-white sm:col-span-2">
             إنشاء تبرع عيني وربطه بالمخزون
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </div>
