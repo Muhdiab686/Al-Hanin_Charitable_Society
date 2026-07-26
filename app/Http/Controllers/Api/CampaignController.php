@@ -14,14 +14,21 @@ use Illuminate\Validation\ValidationException;
 
 class CampaignController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->syncAutoCompletedCampaigns();
 
-        $campaigns = Campaign::query()
+        $perPage = min(100, max(1, (int) $request->integer('per_page', 15)));
+
+        $query = Campaign::query()
             ->with('creator:id,name')
-            ->latest()
-            ->paginate(15);
+            ->latest();
+
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->string('status'));
+        }
+
+        $campaigns = $query->paginate($perPage);
 
         $campaigns->getCollection()->transform(function (Campaign $campaign): array {
             return $this->serializeCampaign($campaign);

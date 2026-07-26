@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import { useAuth } from '../../auth/useAuth'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { badgeClassForAidStatus, labelAidStatusAr, labelAidTypeAr } from '../../lib/operationalLabels'
 
 export function BeneficiaryAidPage() {
@@ -14,6 +16,10 @@ export function BeneficiaryAidPage() {
   const [files, setFiles] = useState<FileList | null>(null)
   const [receiptPayload, setReceiptPayload] = useState('')
   const [receiptAidRequestId, setReceiptAidRequestId] = useState('')
+  const [receiptQrImage, setReceiptQrImage] = useState<{ mime: string; base64: string } | null>(null)
+  const [pendingDeliveries, setPendingDeliveries] = useState(0)
+  const createLock = useSubmitLock()
+  const receiptLock = useSubmitLock()
 
   const deliveredAllocations = useMemo(() => {
     const rows: Array<{
@@ -32,12 +38,12 @@ export function BeneficiaryAidPage() {
         if (!allocation.delivered_at) {
           return
         }
-        const item = allocation.inventory_item as { item_name?: string; item_code?: string } | undefined
+        const item = allocation.inventory_item as { name?: string; item_name?: string; item_code?: string } | undefined
         rows.push({
           aidRequestId: Number(aid.id),
           aidType: String((aid as { type?: string; aid_type?: string }).type ?? (aid as { aid_type?: string }).aid_type ?? ''),
           aidStatus: String(aid.status ?? ''),
-          itemName: String(item?.item_name ?? item?.item_code ?? 'مادة'),
+          itemName: String(item?.name ?? item?.item_name ?? item?.item_code ?? 'مادة'),
           quantity: String(allocation.quantity ?? '—'),
           deliveredAt: String(allocation.delivered_at ?? ''),
           deliveryNote: String(allocation.delivery_note ?? '—'),
@@ -48,11 +54,34 @@ export function BeneficiaryAidPage() {
     return rows.sort((a, b) => b.deliveredAt.localeCompare(a.deliveredAt))
   }, [aids])
 
+  const pendingAids = useMemo(
+    () =>
+      aids.filter((aid) => {
+        const allocations = (aid.inventory_allocations as Record<string, unknown>[] | undefined) ?? []
+        return allocations.some((allocation) => !allocation.delivered_at)
+      }),
+    [aids],
+  )
+
   async function load() {
     setErr(null)
     try {
-      const res = await api.fetchAidRequests({ page: 1 })
+      const [res, wallet] = await Promise.all([
+        api.fetchAidRequests({ page: 1 }),
+        api.fetchBeneficiaryAidWallet().catch(() => null),
+      ])
       setAids((res.data as Record<string, unknown>[]) ?? [])
+
+      if (wallet) {
+        setPendingDeliveries(Number(wallet.pending_deliveries_count ?? 0))
+        const qr = wallet.receipt_qr as { payload?: string; png_base64?: string; mime_type?: string } | null
+        if (qr?.payload) {
+          setReceiptPayload(qr.payload)
+          if (qr.png_base64 && qr.mime_type) {
+            setReceiptQrImage({ mime: qr.mime_type, base64: qr.png_base64 })
+          }
+        }
+      }
     } catch (e) {
       setErr(extractErrorMessage(e, 'تعذّر تحميل طلبات المساعدة'))
     }
@@ -72,20 +101,22 @@ export function BeneficiaryAidPage() {
       return
     }
 
-    try {
-      await api.createAidRequest({
-        beneficiary_id: Number(user.beneficiary_id),
-        type,
-        description: desc,
-        attachments: files ? Array.from(files) : undefined,
-      })
-      setMsg('تم إرسال طلب المساعدة للمراجعة.')
-      setDesc('')
-      setFiles(null)
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'فشل إرسال الطلب'))
-    }
+    await createLock.run(async () => {
+      try {
+        await api.createAidRequest({
+          beneficiary_id: Number(user.beneficiary_id),
+          type,
+          description: desc,
+          attachments: files ? Array.from(files) : undefined,
+        })
+        setMsg('تم إرسال طلب المساعدة للمراجعة.')
+        setDesc('')
+        setFiles(null)
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'فشل إرسال الطلب'))
+      }
+    })
   }
 
   async function onConfirmReceiptByQr(e: FormEvent) {
@@ -97,18 +128,19 @@ export function BeneficiaryAidPage() {
       return
     }
 
-    try {
-      await api.confirmBeneficiaryAidDeliveryByQr({
-        payload: receiptPayload.trim(),
-        aid_request_id: receiptAidRequestId ? Number(receiptAidRequestId) : undefined,
-      })
-      setMsg('تم تأكيد استلام المساعدة بنجاح عبر QR.')
-      setReceiptPayload('')
-      setReceiptAidRequestId('')
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex, 'تعذّر تأكيد الاستلام عبر QR'))
-    }
+    await receiptLock.run(async () => {
+      try {
+        await api.confirmBeneficiaryAidDeliveryByQr({
+          payload: receiptPayload.trim(),
+          aid_request_id: receiptAidRequestId ? Number(receiptAidRequestId) : undefined,
+        })
+        setMsg('تم تأكيد استلام المساعدة بنجاح عبر QR.')
+        setReceiptAidRequestId('')
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex, 'تعذّر تأكيد الاستلام عبر QR'))
+      }
+    })
   }
 
   return (
@@ -131,7 +163,7 @@ export function BeneficiaryAidPage() {
               onChange={(e) => setType(e.target.value)}
             >
               <option value="special_item">مواد أو عينية خاصة</option>
-              <option value="medical_prescription">وصفة طبيّة / صرف دوائي</option>
+              <option value="surgery">عملية</option>
               <option value="urgent_financial">دعم معيشي عاجل</option>
             </select>
           </label>
@@ -158,39 +190,55 @@ export function BeneficiaryAidPage() {
               onChange={(e) => setFiles(e.target.files)}
             />
           </label>
-          <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-medium text-white sm:col-span-2">
+          <SubmitButton busy={createLock.busy} className="rounded-lg bg-emerald-600 py-2.5 font-medium text-white sm:col-span-2">
             إرسال الطلب للمراجعة
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <section className="rounded-2xl border border-sky-400/25 bg-sky-500/10 p-5">
         <h2 className="font-semibold text-white">تأكيد استلام السلة عبر QR</h2>
-        <p className="mt-1 text-xs text-white/50">
-          استخدم الرمز الصادر من الجمعية لتأكيد الاستلام من التطبيق. إذا لم يتوفر التطبيق، يستطيع أمين المستودع التأكيد من واجهته.
+        <p className="mt-1 text-xs text-white/60">
+          رمز عائلتك من الجمعية يظهر أدناه تلقائياً. بعد تنفيذ خطة التوزيع وخصم المستودع، اضغط «تأكيد الاستلام».
+          {pendingDeliveries > 0 ? ` لديك ${pendingDeliveries} تخصيص بانتظار التأكيد.` : ''}
         </p>
+        {receiptQrImage ? (
+          <div className="mt-3 flex flex-wrap items-start gap-4">
+            <img
+              alt="رمز تأكيد الاستلام"
+              className="h-40 w-40 rounded-xl border border-white/15 bg-white p-2"
+              src={`data:${receiptQrImage.mime};base64,${receiptQrImage.base64}`}
+            />
+            <div className="min-w-0 flex-1 text-xs text-white/65">
+              <p className="font-medium text-white">رمز الاستلام الخاص بعائلتك</p>
+              <p className="mt-1 break-all font-mono text-[11px] text-sky-100">{receiptPayload || '—'}</p>
+              <p className="mt-2 text-white/50">أعرض هذا الرمز عند الاستلام أو أكّد من التطبيق مباشرة.</p>
+            </div>
+          </div>
+        ) : null}
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={onConfirmReceiptByQr}>
           <input
-            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white sm:col-span-2"
+            className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 font-mono text-xs text-white sm:col-span-2"
             placeholder="hanin:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             value={receiptPayload}
             onChange={(e) => setReceiptPayload(e.target.value)}
+            readOnly={Boolean(receiptQrImage)}
           />
           <select
             className="rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-white"
             value={receiptAidRequestId}
             onChange={(e) => setReceiptAidRequestId(e.target.value)}
           >
-            <option value="">اختياري: تحديد طلب مساعدة</option>
-            {aids.map((aid) => (
+            <option value="">كل الطلبات بانتظار الاستلام</option>
+            {(pendingAids.length > 0 ? pendingAids : aids).map((aid) => (
               <option key={String(aid.id)} value={String(aid.id)}>
                 #{String(aid.id)} — {labelAidTypeAr(String((aid as { type?: string }).type ?? ''))}
               </option>
             ))}
           </select>
-          <button type="submit" className="rounded-lg bg-sky-700 py-2.5 font-medium text-white">
+          <SubmitButton busy={receiptLock.busy} className="rounded-lg bg-sky-700 py-2.5 font-medium text-white">
             تأكيد الاستلام
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -261,7 +309,9 @@ export function BeneficiaryAidPage() {
                 deliveredAllocations.map((row, idx) => (
                   <tr key={`${row.aidRequestId}-${idx}`} className={`border-b border-white/[0.06] ${idx % 2 === 0 ? 'bg-black/15' : ''}`}>
                     <td className="px-3 py-2 font-mono text-white">#{row.aidRequestId}</td>
-                    <td className="px-3 py-2">{labelAidTypeAr(row.aidType)} — {labelAidStatusAr(row.aidStatus)}</td>
+                    <td className="px-3 py-2">
+                      {labelAidTypeAr(row.aidType)} — {labelAidStatusAr(row.aidStatus)}
+                    </td>
                     <td className="px-3 py-2">{row.itemName}</td>
                     <td className="px-3 py-2">{row.quantity}</td>
                     <td className="px-3 py-2">{row.deliveredAt.replace('T', ' ').slice(0, 19)}</td>

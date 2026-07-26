@@ -18,6 +18,7 @@ use App\Models\Beneficiary;
 use App\Models\Family;
 use App\Models\InventoryItem;
 use App\Services\AppNotificationService;
+use App\Support\AidRequestTypeGroups;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,8 +37,22 @@ class AidRequestController extends Controller
             'publisher:id,name,email',
         ]);
 
-        if ($request->user()?->hasRole('beneficiary')) {
-            $query->where('created_by', $request->user()->id);
+        $user = $request->user();
+
+        if ($user?->hasRole('beneficiary')) {
+            $beneficiaryId = Beneficiary::query()
+                ->where('user_id', $user->id)
+                ->value('id');
+
+            $query->where('beneficiary_id', $beneficiaryId ?? 0);
+        } elseif ($user?->hasRole('secretary') && ! $user->hasRole('recording_secretary') && ! $user->hasRole('admin')) {
+            $query->whereIn('type', AidRequestTypeGroups::MEDICAL);
+        } elseif ($user?->hasRole('storekeeper') && ! $user->hasRole('admin')) {
+            $query->whereIn('type', AidRequestTypeGroups::LIVELIHOOD);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', (string) $request->string('type'));
         }
 
         return response()->json($query->latest()->paginate(15));
@@ -86,6 +101,8 @@ class AidRequestController extends Controller
         AidRequest $aidRequest,
         AppNotificationService $notifier
     ): JsonResponse {
+        $this->assertCanManageAidRequestType($request, $aidRequest);
+
         if ($aidRequest->status !== 'pending') {
             throw ValidationException::withMessages([
                 'aid_request' => [__('Only pending aid requests can be reviewed.')],
@@ -132,6 +149,8 @@ class AidRequestController extends Controller
         AidRequest $aidRequest,
         AppNotificationService $notifier
     ): JsonResponse {
+        $this->assertCanManageAidRequestType($request, $aidRequest);
+
         if ($aidRequest->status !== 'approved') {
             throw ValidationException::withMessages([
                 'aid_request' => [__('Only approved aid requests can be published for donors.')],
@@ -161,8 +180,11 @@ class AidRequestController extends Controller
         ]);
     }
 
-    public function storeInventoryDistribution(StoreAidInventoryDistributionRequest $request, AidRequest $aidRequest): JsonResponse
-    {
+    public function storeInventoryDistribution(
+        StoreAidInventoryDistributionRequest $request,
+        AidRequest $aidRequest,
+        AppNotificationService $notifier
+    ): JsonResponse {
         $validated = $request->validated();
 
         $allocations = DB::transaction(function () use ($request, $aidRequest, $validated): array {
@@ -207,6 +229,26 @@ class AidRequestController extends Controller
 
             return $created;
         });
+
+        $aidRequest->loadMissing('beneficiary.user');
+        $itemNames = collect($allocations)
+            ->map(fn ($allocation): string => trim((string) ($allocation->inventoryItem?->name ?? 'مادة')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $summary = $itemNames === [] ? 'مواد عينية' : implode('، ', $itemNames);
+
+        $notifier->notifyUser(
+            $aidRequest->beneficiary?->user,
+            'تم تخصيص مساعدة عينية لك',
+            'تم تخصيص «'.$summary.'» ضمن طلب المساعدة #'.$aidRequest->id.'. راجع محفظتك.',
+            '/app/beneficiary/wallet',
+            [
+                'aid_request_id' => $aidRequest->id,
+                'item_labels' => $itemNames,
+            ]
+        );
 
         return response()->json([
             'message' => __('Inventory allocated successfully.'),
@@ -386,6 +428,32 @@ class AidRequestController extends Controller
         return response()->json([
             'message' => __('Aid receipt confirmed successfully.'),
             'deliveries' => $deliveries,
+        ]);
+    }
+
+    private function assertCanManageAidRequestType(Request $request, AidRequest $aidRequest): void
+    {
+        $user = $request->user();
+        if ($user === null) {
+            abort(403);
+        }
+
+        if ($user->hasRole('admin') || $user->hasRole('recording_secretary')) {
+            return;
+        }
+
+        $type = (string) $aidRequest->type;
+
+        if ($user->hasRole('secretary') && AidRequestTypeGroups::isMedical($type)) {
+            return;
+        }
+
+        if ($user->hasRole('storekeeper') && AidRequestTypeGroups::isLivelihood($type)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'aid_request' => [__('You are not allowed to manage this aid request type.')],
         ]);
     }
 }

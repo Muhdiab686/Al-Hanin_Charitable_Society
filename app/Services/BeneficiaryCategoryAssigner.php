@@ -94,7 +94,7 @@ class BeneficiaryCategoryAssigner
     private function hasMedicalCase(Beneficiary $beneficiary): bool
     {
         return $beneficiary->aidRequests()
-            ->where('type', 'medical_prescription')
+            ->whereIn('type', ['surgery', 'medical_prescription'])
             ->exists() || (float) $beneficiary->medical_wallet_balance > 0;
     }
 

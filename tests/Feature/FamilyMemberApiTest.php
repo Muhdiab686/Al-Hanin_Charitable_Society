@@ -20,7 +20,7 @@ class FamilyMemberApiTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
     }
 
-    private function secretaryToken(): string
+    private function recordingSecretaryToken(): string
     {
         $user = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
         $user->syncRoles([UserRole::RecordingSecretary->value]);
@@ -28,10 +28,10 @@ class FamilyMemberApiTest extends TestCase
         return $user->createToken('test')->plainTextToken;
     }
 
-    public function test_secretary_can_add_spouse_to_existing_family(): void
+    public function test_recording_secretary_can_add_spouse_to_existing_family(): void
     {
         $family = Family::factory()->create(['members_count' => 2]);
-        $headers = ['Authorization' => 'Bearer '.$this->secretaryToken()];
+        $headers = ['Authorization' => 'Bearer '.$this->recordingSecretaryToken()];
 
         $response = $this->postJson('/api/v1/families/'.$family->id.'/members', [
             'national_id' => 'SPOUSE-001',
@@ -75,10 +75,10 @@ class FamilyMemberApiTest extends TestCase
         ]);
     }
 
-    public function test_secretary_can_list_family_members(): void
+    public function test_recording_secretary_can_list_family_members(): void
     {
         $family = Family::factory()->create();
-        $headers = ['Authorization' => 'Bearer '.$this->secretaryToken()];
+        $headers = ['Authorization' => 'Bearer '.$this->recordingSecretaryToken()];
 
         $this->getJson('/api/v1/families/'.$family->id.'/members', $headers)
             ->assertOk()

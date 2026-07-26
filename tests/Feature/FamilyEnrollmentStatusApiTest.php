@@ -86,10 +86,10 @@ class FamilyEnrollmentStatusApiTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_secretary_can_submit_draft_and_withdraw_pending_board(): void
+    public function test_recording_secretary_can_submit_draft_and_withdraw_pending_board(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
-        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
         $token = $secretary->createToken('test-device')->plainTextToken;
 
         $draftFamily = Family::factory()->create([
@@ -115,15 +115,15 @@ class FamilyEnrollmentStatusApiTest extends TestCase
             ->assertJsonPath('family.enrollment_status', 'draft');
     }
 
-    public function test_secretary_can_resubmit_rejected_to_pending_board(): void
+    public function test_recording_secretary_can_resubmit_rejected_to_pending_board(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
-        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Rejected,
         ]);
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $this->patchJson(
             '/api/v1/families/'.$family->id.'/enrollment-status',
@@ -152,13 +152,13 @@ class FamilyEnrollmentStatusApiTest extends TestCase
 
     public function test_cannot_change_finalized_enrollment_without_valid_transition(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
-        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
+        $secretary->syncRoles([UserRole::Secretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Approved,
         ]);
 
-        $token = $secretary->createToken('test-device')->plainTextToken;
+        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
 
         $this->patchJson(
             '/api/v1/families/'.$family->id.'/enrollment-status',

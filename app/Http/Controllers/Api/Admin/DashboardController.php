@@ -107,7 +107,7 @@ class DashboardController extends Controller
                 ->toBase()
                 ->selectRaw("
                     CASE
-                        WHEN type = 'medical_prescription' THEN 'health'
+                        WHEN type IN ('surgery', 'medical_prescription') THEN 'health'
                         WHEN type = 'urgent_financial' THEN 'financial'
                         WHEN type = 'special_item' THEN 'food'
                         ELSE 'food'

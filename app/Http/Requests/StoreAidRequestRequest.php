@@ -38,7 +38,7 @@ class StoreAidRequestRequest extends FormRequest
                     });
                 }),
             ],
-            'type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription'])],
+            'type' => ['required', Rule::in(['urgent_financial', 'special_item', 'surgery', 'medical_prescription'])],
             'requested_amount' => ['nullable', 'numeric', 'min:0'],
             'description' => ['required', 'string', 'max:1000'],
             'attachments' => ['nullable', 'array', 'max:5'],

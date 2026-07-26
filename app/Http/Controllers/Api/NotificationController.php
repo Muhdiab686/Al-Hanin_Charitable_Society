@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,12 +12,23 @@ class NotificationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $notifications = $request->user()
-            ->notifications()
-            ->latest()
-            ->paginate(20);
+        $user = $request->user();
+        $query = $user->notifications()->latest();
 
-        return response()->json($notifications);
+        $role = $user->role instanceof UserRole
+            ? $user->role
+            : UserRole::tryFrom((string) $user->getRawOriginal('role'));
+
+        // إخفاء إشعارات الإدارة/العيادة القديمة التي وصلت بالخطأ إلى المستفيد
+        if ($role === UserRole::Beneficiary) {
+            $query->where(function ($builder): void {
+                $builder
+                    ->where('data->action_url', 'like', '/app/beneficiary%')
+                    ->orWhere('data->action_url', 'like', '%/beneficiary/%');
+            });
+        }
+
+        return response()->json($query->paginate(20));
     }
 
     public function markAsRead(Request $request, string $notification): JsonResponse

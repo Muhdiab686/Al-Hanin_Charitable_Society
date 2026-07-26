@@ -1,6 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
+import { SubmitButton } from '../../components/SubmitButton'
+import { useSubmitLock } from '../../hooks/useSubmitLock'
 import type { Paginated } from '../../types/models'
 
 import { labelFamilyRelationshipAr } from '../../lib/operationalLabels'
@@ -37,6 +39,8 @@ export function SecretaryBeneficiariesPage() {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const createLock = useSubmitLock()
+  const editLock = useSubmitLock()
 
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
@@ -46,6 +50,7 @@ export function SecretaryBeneficiariesPage() {
   const [famAddress, setFamAddress] = useState('')
   const [members, setMembers] = useState('4')
   const [famIncome, setFamIncome] = useState('')
+  const [housingStatus, setHousingStatus] = useState('rented')
   const [famEnrollNew, setFamEnrollNew] = useState<'draft' | 'pending_board'>('pending_board')
 
   const [bName, setBName] = useState('')
@@ -73,6 +78,7 @@ export function SecretaryBeneficiariesPage() {
   const [profAddress, setProfAddress] = useState('')
   const [profMembers, setProfMembers] = useState('')
   const [profIncome, setProfIncome] = useState('')
+  const [profHousingStatus, setProfHousingStatus] = useState('')
 
   const [walletBenId, setWalletBenId] = useState('')
   const [walletBalance, setWalletBalance] = useState<string | null>(null)
@@ -244,8 +250,6 @@ export function SecretaryBeneficiariesPage() {
           family_relationship: 'head',
           phone: benPhone.trim() || null,
           date_of_birth: benDob.trim() || null,
-          health_status: benHealthStatus || null,
-          health_details: benHealthDetails.trim() || null,
           notes: benNotes.trim() || null,
         },
         members: createMembers
@@ -255,9 +259,6 @@ export function SecretaryBeneficiariesPage() {
             name: member.name.trim(),
             family_relationship: member.family_relationship,
             gender: member.gender || null,
-            date_of_birth: member.date_of_birth || null,
-            health_status: member.health_status || null,
-            health_details: member.health_details.trim() || null,
           })),
       })
       const credentials = response.credentials
@@ -270,9 +271,7 @@ export function SecretaryBeneficiariesPage() {
       }
       setShowCreateDialog(false)
       setNationalId('')
-      setCreateMembers([
-        { national_id: '', name: '', family_relationship: 'spouse', gender: '', date_of_birth: '', health_status: '', health_details: '' },
-      ])
+      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
@@ -284,35 +283,34 @@ export function SecretaryBeneficiariesPage() {
     setMsg(null)
     setErr(null)
 
-    try {
-      const payload: Record<string, unknown> = {}
+    await editLock.run(async () => {
+      try {
+        const payload: Record<string, unknown> = {}
 
-      if (editName.trim()) {
-        payload.name = editName.trim()
-      }
+        if (editName.trim()) {
+          payload.name = editName.trim()
+        }
 
-      if (editNationalId.trim()) {
-        payload.national_id = editNationalId.trim()
-      }
+        if (editNationalId.trim()) {
+          payload.national_id = editNationalId.trim()
+        }
 
-      if (editPhone.trim()) {
-        payload.phone = editPhone.trim()
-      }
+        if (editPhone.trim()) {
+          payload.phone = editPhone.trim()
+        }
 
       if (editDob.trim()) {
         payload.date_of_birth = editDob.trim()
       }
 
-      payload.health_status = editHealthStatus || null
-      payload.health_details = editHealthDetails.trim() || null
-
-      await api.updateBeneficiary(Number(editId), payload)
-      setMsg('تم تحديث بيانات المستفيد.')
-      setShowEditDialog(false)
-      await load()
-    } catch (ex) {
-      setErr(extractErrorMessage(ex as Error, 'فشل التحديث'))
-    }
+        await api.updateBeneficiary(Number(editId), payload)
+        setMsg('تم تحديث بيانات المستفيد.')
+        setShowEditDialog(false)
+        await load()
+      } catch (ex) {
+        setErr(extractErrorMessage(ex as Error, 'فشل التحديث'))
+      }
+    })
   }
 
   async function onRecalc() {
@@ -423,6 +421,10 @@ export function SecretaryBeneficiariesPage() {
 
       if (profIncome.trim()) {
         payload.monthly_income = Number(profIncome)
+      }
+
+      if (profHousingStatus.trim()) {
+        payload.housing_status = profHousingStatus.trim()
       }
 
       await api.updateFamilyProfile(Number(famProfileId), payload)
@@ -1131,6 +1133,20 @@ export function SecretaryBeneficiariesPage() {
                 value={famIncome}
                 onChange={(e) => setFamIncome(e.target.value)}
               />
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-white/55">حالة السكن *</span>
+                <select
+                  required
+                  className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={housingStatus}
+                  onChange={(e) => setHousingStatus(e.target.value)}
+                >
+                  <option value="owned">ملك</option>
+                  <option value="rented">إيجار</option>
+                  <option value="hosted">ضيافة</option>
+                  <option value="unstable">غير مستقر</option>
+                </select>
+              </label>
               <select
                 className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
                 value={famEnrollNew}
@@ -1305,9 +1321,9 @@ export function SecretaryBeneficiariesPage() {
               >
                 + إضافة فرد عائلة
               </button>
-              <button type="submit" className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white sm:col-span-2">
+              <SubmitButton busy={createLock.busy} className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white sm:col-span-2">
                 حفظ التسجيل
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -1366,27 +1382,9 @@ export function SecretaryBeneficiariesPage() {
                 value={editDob}
                 onChange={(e) => setEditDob(e.target.value)}
               />
-              <select
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
-                value={editHealthStatus}
-                onChange={(e) => setEditHealthStatus(e.target.value)}
-              >
-                {HEALTH_STATUS_AR.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white sm:col-span-2"
-                placeholder="تفاصيل الحالة الصحية (اختياري)"
-                rows={2}
-                value={editHealthDetails}
-                onChange={(e) => setEditHealthDetails(e.target.value)}
-              />
               <button type="submit" className="rounded-lg bg-violet-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل المستفيد
-              </button>
+              </SubmitButton>
               <button type="button" onClick={() => void onRecalc()} className="rounded-lg border border-white/20 px-3 py-2 text-xs sm:col-span-2">
                 إعادة تصنيف تلقائية
               </button>
@@ -1437,6 +1435,20 @@ export function SecretaryBeneficiariesPage() {
                 value={profIncome}
                 onChange={(e) => setProfIncome(e.target.value)}
               />
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span className="text-[11px] text-white/55">حالة السكن</span>
+                <select
+                  className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                  value={profHousingStatus}
+                  onChange={(e) => setProfHousingStatus(e.target.value)}
+                >
+                  <option value="">— بدون تغيير —</option>
+                  <option value="owned">ملك</option>
+                  <option value="rented">إيجار</option>
+                  <option value="hosted">ضيافة</option>
+                  <option value="unstable">غير مستقر</option>
+                </select>
+              </label>
               <button type="submit" className="rounded-lg bg-sky-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل الأسرة
               </button>

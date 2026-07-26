@@ -4,8 +4,6 @@ const AID_TYPE_AR: Record<string, string> = {
   urgent_financial: 'دعم معيشي عاجل',
   special_item: 'مواد أو عينية خاصة',
   medical_prescription: 'وصفة طبيّة / صرف دوائي',
-  food_basket: 'سلة غذائية',
-  stationery: 'قرطاسية',
 }
 
 const AID_STATUS_AR: Record<string, string> = {
@@ -18,6 +16,8 @@ const AID_STATUS_AR: Record<string, string> = {
 
 const PLAN_STATUS_AR: Record<string, string> = {
   draft: 'مسودة',
+  in_progress: 'قيد التنفيذ',
+  completed: 'منفّذة',
   approved: 'معتمدة',
   published: 'منشورة',
   closed: 'مغلقة',
@@ -104,6 +104,19 @@ export function labelSpoilageCategoryAr(code: unknown): string {
   const k = String(code ?? '').trim()
 
   return SPOILAGE_CATEGORY_AR[k] ?? (k ? fallback(k) : '—')
+}
+
+export function labelHousingStatusAr(code: unknown): string {
+  const k = String(code ?? '').trim()
+  const map: Record<string, string> = {
+    owned: 'ملك',
+    rented: 'إيجار',
+    hosted: 'ضيافة',
+    unstable: 'غير مستقر',
+    rent: 'إيجار',
+  }
+
+  return map[k] ?? (k ? fallback(k) : '—')
 }
 
 export function labelRemovalReasonAr(code: unknown): string {

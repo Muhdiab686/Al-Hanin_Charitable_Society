@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\PreviewAidDistributionPlanRequest;
 use App\Http\Requests\StoreAidDistributionPlanRequest;
 use App\Models\AidDistributionPlan;
 use App\Models\AidDistributionPlanLine;
 use App\Models\Family;
+use App\Services\AidDistributionFulfillmentService;
+use App\Services\AppNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
@@ -22,6 +23,7 @@ class AidDistributionPlanController extends Controller
         $plans = AidDistributionPlan::query()
             ->with('creator:id,name,email')
             ->with('campaign:id,title,status,goal_amount,raised_amount,spent_amount')
+            ->with('inventoryItem:id,name,item_code,quantity_remaining,status')
             ->withCount('lines')
             ->latest()
             ->paginate(15);
@@ -56,13 +58,63 @@ class AidDistributionPlanController extends Controller
         ]);
     }
 
-    public function store(StoreAidDistributionPlanRequest $request): JsonResponse
+    public function show(AidDistributionPlan $aidDistributionPlan): JsonResponse
+    {
+        $plan = $aidDistributionPlan->load([
+            'creator:id,name,email',
+            'campaign:id,title,status',
+            'inventoryItem:id,name,item_code,quantity_remaining,status',
+            'lines' => fn ($query) => $query->orderBy('allocation_rank')->orderBy('id'),
+            'lines.beneficiary:id,name,national_id,phone,family_id',
+            'lines.family:id,family_code,head_name,phone,housing_status',
+            'lines.lastAidRequest:id,status,type',
+        ]);
+
+        $cycles = max(1, (int) $plan->cycles_per_year);
+        $completed = min((int) $plan->completed_cycles, $cycles);
+        $plan->setAttribute('progress_percentage', round(($completed / $cycles) * 100, 2));
+        $plan->setAttribute('remaining_cycles', max(0, $cycles - $completed));
+
+        return response()->json([
+            'plan' => $plan,
+            'beneficiaries' => $plan->lines->map(function (AidDistributionPlanLine $line): array {
+                $isCash = $line->allocated_amount !== null;
+
+                return [
+                    'line_id' => $line->id,
+                    'allocation_rank' => $line->allocation_rank,
+                    'beneficiary_id' => $line->beneficiary_id,
+                    'beneficiary_name' => $line->beneficiary?->name,
+                    'beneficiary_phone' => $line->beneficiary?->phone,
+                    'national_id' => $line->beneficiary?->national_id,
+                    'family_id' => $line->family_id,
+                    'family_code' => $line->family?->family_code,
+                    'family_head' => $line->family?->head_name,
+                    'family_phone' => $line->family?->phone,
+                    'housing_status' => $line->family?->housing_status,
+                    'allocated_amount' => $line->allocated_amount,
+                    'allocated_units' => $line->allocated_units,
+                    'allocation_note' => $line->allocation_note,
+                    'value_label' => $isCash
+                        ? number_format((float) $line->allocated_amount, 2).' $'
+                        : ((int) $line->allocated_units).' وحدة',
+                    'last_fulfilled_cycle' => (int) $line->last_fulfilled_cycle,
+                    'executed' => (int) $line->last_fulfilled_cycle > 0 || (int) $plan->completed_cycles > 0,
+                    'aid_request_id' => $line->last_aid_request_id,
+                    'aid_request_status' => $line->lastAidRequest?->status,
+                ];
+            })->values(),
+        ]);
+    }
+
+    public function store(StoreAidDistributionPlanRequest $request, AppNotificationService $notifier): JsonResponse
     {
         $validated = $request->validated();
 
         $filterCriteria = $validated['filter_criteria'] ?? [];
         $distributionFrequency = (string) ($validated['distribution_frequency'] ?? 'once');
         $cyclesPerYear = $this->cyclesPerYear($distributionFrequency);
+        $itemLabel = trim((string) ($validated['item_label'] ?? '')) ?: $validated['title'];
 
         $eligibleFamilies = $this->eligibleFamilies($filterCriteria);
 
@@ -94,11 +146,14 @@ class AidDistributionPlanController extends Controller
             $eligibleFamilies,
             $filterCriteria,
             $distributionFrequency,
-            $cyclesPerYear
+            $cyclesPerYear,
+            $itemLabel
         ): AidDistributionPlan {
             $plan = AidDistributionPlan::query()->create([
                 'title' => $validated['title'],
                 'aid_type' => $validated['aid_type'],
+                'item_label' => $itemLabel,
+                'inventory_item_id' => $validated['inventory_item_id'] ?? null,
                 'campaign_id' => $validated['campaign_id'] ?? null,
                 'distribution_date' => $validated['distribution_date'],
                 'distribution_frequency' => $distributionFrequency,
@@ -124,23 +179,62 @@ class AidDistributionPlanController extends Controller
             return $plan;
         });
 
+        $plan->load(['lines.beneficiary.user']);
+        foreach ($plan->lines as $line) {
+            $beneficiaryUser = $line->beneficiary?->user;
+            if ($beneficiaryUser === null) {
+                continue;
+            }
+
+            $isCash = $line->allocated_amount !== null;
+            $detail = $isCash
+                ? sprintf('%s بقيمة %s', $itemLabel, number_format((float) $line->allocated_amount, 2))
+                : sprintf('%s (كمية %d)', $itemLabel, (int) $line->allocated_units);
+
+            $notifier->notifyUser(
+                $beneficiaryUser,
+                'وصلك مساعدة من الجمعية',
+                'تم تخصيص '.$detail.' ضمن خطة «'.$plan->title.'». راجع محفظتك للتفاصيل. التنفيذ يخصم من المستودع ويصدر رمز الاستلام.',
+                '/app/beneficiary/wallet',
+                [
+                    'plan_id' => $plan->id,
+                    'plan_line_id' => $line->id,
+                    'item_label' => $itemLabel,
+                ]
+            );
+        }
+
         return response()->json([
             'message' => __('Aid distribution plan created successfully.'),
             'plan' => $plan->load([
                 'creator:id,name,email',
                 'campaign:id,title,status,goal_amount,raised_amount,spent_amount',
+                'inventoryItem:id,name,item_code,quantity_remaining,status',
                 'lines.family',
                 'lines.beneficiary',
             ]),
         ], 201);
     }
 
-    public function completeCycle(AidDistributionPlan $aidDistributionPlan): JsonResponse
-    {
+    public function completeCycle(
+        CompleteAidDistributionPlanCycleRequest $request,
+        AidDistributionPlan $aidDistributionPlan,
+        AidDistributionFulfillmentService $fulfillment
+    ): JsonResponse {
         $cyclesPerYear = max(1, (int) $aidDistributionPlan->cycles_per_year);
-        $nextCompletedCycles = min($cyclesPerYear, (int) $aidDistributionPlan->completed_cycles + 1);
-
+        $previousCycles = (int) $aidDistributionPlan->completed_cycles;
+        $nextCompletedCycles = min($cyclesPerYear, $previousCycles + 1);
         $nextStatus = $nextCompletedCycles >= $cyclesPerYear ? 'completed' : 'in_progress';
+        $inventoryItemId = $request->validated('inventory_item_id');
+
+        if ($nextCompletedCycles > $previousCycles) {
+            $fulfillment->fulfillCycle(
+                $aidDistributionPlan,
+                $nextCompletedCycles,
+                $request->user(),
+                $inventoryItemId !== null ? (int) $inventoryItemId : null
+            );
+        }
 
         $aidDistributionPlan->forceFill([
             'completed_cycles' => $nextCompletedCycles,
@@ -158,7 +252,10 @@ class AidDistributionPlanController extends Controller
 
         return response()->json([
             'message' => __('Plan cycle marked as completed.'),
-            'plan' => $aidDistributionPlan->fresh()->load('creator:id,name,email'),
+            'plan' => $aidDistributionPlan->fresh()->load([
+                'creator:id,name,email',
+                'inventoryItem:id,name,item_code,quantity_remaining,status',
+            ]),
         ]);
     }
 
@@ -341,7 +438,18 @@ class AidDistributionPlanController extends Controller
 
             if ($allowedHousingStatuses !== []) {
                 $housingStatus = strtolower(trim((string) ($family->housing_status ?? '')));
-                if (! in_array($housingStatus, $allowedHousingStatuses, true)) {
+                // توافق قيم قديمة (rent) مع القيمة الحالية (rented)
+                $aliases = [
+                    'rent' => 'rented',
+                    'rented' => 'rented',
+                ];
+                $normalizedFamily = $aliases[$housingStatus] ?? $housingStatus;
+                $normalizedAllowed = array_map(
+                    fn (string $value): string => $aliases[$value] ?? $value,
+                    $allowedHousingStatuses,
+                );
+
+                if (! in_array($normalizedFamily, $normalizedAllowed, true)) {
                     return false;
                 }
             }

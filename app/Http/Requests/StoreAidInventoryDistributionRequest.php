@@ -44,7 +44,7 @@ class StoreAidInventoryDistributionRequest extends FormRequest
                 );
             }
 
-            if (! in_array($aidRequest->type, ['special_item', 'medical_prescription'], true)) {
+            if (! in_array($aidRequest->type, ['special_item', 'surgery', 'medical_prescription'], true)) {
                 $validator->errors()->add(
                     'aid_request',
                     __('Inventory allocation applies only to non-cash aid request types.')

@@ -154,6 +154,12 @@ export function SecretaryMedicalPage() {
       return
     }
 
+    if (!labFile) {
+      setErr('اختر ملف PDF أو صورة للتقرير.')
+
+      return
+    }
+
     try {
       await api.uploadBeneficiaryLabReport(activeBenId, {
         title: labTitle.trim(),
@@ -536,15 +542,24 @@ export function SecretaryMedicalPage() {
                 onChange={(e) => setLabFindings(e.target.value)}
               />
               <label className="flex flex-col gap-1 sm:col-span-2">
-                <span className="text-[11px] text-white/52">مرفق (PDF أو صورة — حتى تقريباً 8MB)</span>
+                <span className="text-[11px] text-white/52">مرفق (PDF أو صورة — حتى 10MB)</span>
                 <input
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf"
+                  accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp,image/gif,.pdf,.png,.jpg,.jpeg,.webp,.gif"
                   className="text-[12px] text-white/80 file:mr-3 file:rounded-lg file:border-0 file:bg-white/15 file:px-3 file:py-1.5"
                   onChange={(e) => setLabFile(e.target.files?.[0] ?? null)}
                 />
+                {labFile ? (
+                  <span className="text-[11px] text-cyan-200/80">المحدد: {labFile.name}</span>
+                ) : (
+                  <span className="text-[11px] text-white/40">اختَر ملفاً قبل الرفع</span>
+                )}
               </label>
-              <button type="submit" className="rounded-lg bg-cyan-600 py-2.5 font-medium text-white sm:col-span-2">
+              <button
+                type="submit"
+                disabled={!labFile}
+                className="rounded-lg bg-cyan-600 py-2.5 font-medium text-white sm:col-span-2 disabled:opacity-40"
+              >
                 رفع ومزامنة
               </button>
             </form>

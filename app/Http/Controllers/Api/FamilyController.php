@@ -223,7 +223,13 @@ class FamilyController extends Controller
         Family $family,
         BeneficiaryCategoryAssigner $assigner
     ): JsonResponse {
-        $family->forceFill($request->validated())->save();
+        $validated = $request->validated();
+
+        if (array_key_exists('housing_status', $validated) && filled($validated['housing_status'])) {
+            $validated['profile_completed_at'] = $family->profile_completed_at ?? now();
+        }
+
+        $family->forceFill($validated)->save();
 
         $family->beneficiaries()->each(fn (Beneficiary $beneficiary) => $assigner->assign($beneficiary));
 
@@ -243,7 +249,7 @@ class FamilyController extends Controller
             ->with([
                 'beneficiary:id,name,family_id',
                 'approvals.reviewer:id,name,email',
-                'inventoryAllocations.inventoryItem:id,item_name,item_code',
+                'inventoryAllocations.inventoryItem:id,name,item_code',
                 'inventoryAllocations.deliveryOfficer:id,name,email',
             ])
             ->latest('submitted_at')
