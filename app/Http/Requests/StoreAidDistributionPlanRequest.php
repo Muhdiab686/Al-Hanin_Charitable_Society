@@ -21,7 +21,8 @@ class StoreAidDistributionPlanRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription'])],
+            'aid_type' => ['required', Rule::in(['urgent_financial', 'special_item', 'medical_prescription', 'food_basket', 'stationery', 'surgery'])],
+            'item_label' => ['nullable', 'string', 'max:255'],
             'campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
             'distribution_date' => ['required', 'date'],
             'distribution_frequency' => ['nullable', Rule::in(['once', 'quarterly', 'yearly'])],

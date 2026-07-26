@@ -23,14 +23,14 @@ class FamilyQrCodeApiTest extends TestCase
 
     public function test_recording_secretary_can_fetch_qr_for_approved_family(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::Approved,
             'qr_token' => '550e8400-e29b-41d4-a716-446655440001',
         ]);
 
-        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
+        $token = $secretary->createToken('test-device')->plainTextToken;
 
         $response = $this->getJson('/api/v1/families/'.$family->id.'/qr-code', [
             'Authorization' => 'Bearer '.$token,
@@ -86,14 +86,14 @@ class FamilyQrCodeApiTest extends TestCase
 
     public function test_qr_not_available_when_family_not_approved(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $family = Family::factory()->create([
             'enrollment_status' => FamilyEnrollmentStatus::PendingBoard,
             'qr_token' => null,
         ]);
 
-        $token = $recordingSecretary->createToken('test-device')->plainTextToken;
+        $token = $secretary->createToken('test-device')->plainTextToken;
 
         $this->getJson('/api/v1/families/'.$family->id.'/qr-code', [
             'Authorization' => 'Bearer '.$token,

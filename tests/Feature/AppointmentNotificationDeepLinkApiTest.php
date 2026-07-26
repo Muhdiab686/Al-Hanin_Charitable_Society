@@ -47,6 +47,8 @@ class AppointmentNotificationDeepLinkApiTest extends TestCase
             'doctor_id' => $doctor->id,
             'requested_specialty' => 'طب عام',
             'reason' => 'متابعة',
+            'preferred_date' => now()->addDay()->toDateString(),
+            'preferred_time' => '10:00',
         ], [
             'Authorization' => 'Bearer '.$beneficiaryUser->createToken('b')->plainTextToken,
         ]);

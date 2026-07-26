@@ -25,8 +25,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_beneficiary_is_auto_classified_on_create(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $response = $this->postJson('/api/v1/beneficiaries', [
             'family' => [
@@ -41,7 +41,7 @@ class BeneficiaryCategorizationApiTest extends TestCase
                 'name' => 'Beneficiary A',
             ],
         ], [
-            'Authorization' => 'Bearer '.$recordingSecretary->createToken('s')->plainTextToken,
+            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
         ]);
 
         $response->assertCreated();
@@ -51,8 +51,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_updating_family_profile_recalculates_category(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
 
         $family = Family::factory()->create([
@@ -80,8 +80,8 @@ class BeneficiaryCategorizationApiTest extends TestCase
 
     public function test_can_update_category_rule_and_recalculate_specific_beneficiary(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
 
         $healthCategory = Category::query()->where('name', 'health')->firstOrFail();

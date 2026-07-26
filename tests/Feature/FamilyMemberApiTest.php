@@ -53,7 +53,7 @@ class FamilyMemberApiTest extends TestCase
     public function test_secretary_can_add_member_with_health_status_and_newborn_date_of_birth(): void
     {
         $family = Family::factory()->create(['members_count' => 1]);
-        $headers = ['Authorization' => 'Bearer '.$this->secretaryToken()];
+        $headers = ['Authorization' => 'Bearer '.$this->recordingSecretaryToken()];
 
         $response = $this->postJson('/api/v1/families/'.$family->id.'/members', [
             'national_id' => 'NEWBORN-001',

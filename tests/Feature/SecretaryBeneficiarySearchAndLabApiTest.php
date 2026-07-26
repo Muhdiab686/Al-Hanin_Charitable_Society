@@ -47,6 +47,7 @@ class SecretaryBeneficiarySearchAndLabApiTest extends TestCase
             'family' => [
                 'head_name' => 'أسرة أضافها الأدمن',
                 'members_count' => 1,
+                'housing_status' => 'rented',
             ],
             'beneficiary' => [
                 'national_id' => 'NID-ADMIN-CREATED-001',

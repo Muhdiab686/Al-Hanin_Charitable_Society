@@ -23,8 +23,8 @@ class FamilyAidEligibilityApiTest extends TestCase
 
     public function test_recording_secretary_can_pause_and_resume_family_aid_eligibility(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $token = $secretary->createToken('s')->plainTextToken;
 
         $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
@@ -52,15 +52,15 @@ class FamilyAidEligibilityApiTest extends TestCase
 
     public function test_cannot_pause_without_reason(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
 
         $family = Family::factory()->create(['enrollment_status' => FamilyEnrollmentStatus::Approved]);
 
         $this->patchJson('/api/v1/families/'.$family->id.'/aid-eligibility', [
             'has_direct_income' => true,
         ], [
-            'Authorization' => 'Bearer '.$recordingSecretary->createToken('s')->plainTextToken,
+            'Authorization' => 'Bearer '.$secretary->createToken('s')->plainTextToken,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['aid_pause_reason']);
     }

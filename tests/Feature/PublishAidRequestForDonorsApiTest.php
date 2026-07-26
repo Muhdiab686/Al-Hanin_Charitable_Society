@@ -23,8 +23,8 @@ class PublishAidRequestForDonorsApiTest extends TestCase
 
     public function test_approved_aid_request_can_be_published_for_donors(): void
     {
-        $secretary = User::factory()->create(['role' => UserRole::Secretary->value]);
-        $secretary->syncRoles([UserRole::Secretary->value]);
+        $secretary = User::factory()->create(['role' => UserRole::RecordingSecretary->value]);
+        $secretary->syncRoles([UserRole::RecordingSecretary->value]);
         $headers = ['Authorization' => 'Bearer '.$secretary->createToken('t')->plainTextToken];
 
         $beneficiary = Beneficiary::factory()->create();

@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Enums\FamilyEnrollmentStatus;
 use App\Enums\FamilyRelationship;
+use App\Enums\HealthStatus;
+use App\Enums\HousingStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
