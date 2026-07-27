@@ -16,7 +16,6 @@ class AuthUserResource extends JsonResource
     {
         $role = $this->role->value;
 
-        
         $spatieRoles = $this->getRoleNames();
 
         if (! $spatieRoles->contains($role)) {
