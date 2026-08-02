@@ -241,6 +241,7 @@ export function SecretaryBeneficiariesPage() {
           address: famAddress.trim() || null,
           members_count: Number(members),
           monthly_income: famIncome.trim() ? Number(famIncome) : 0,
+          housing_status: housingStatus,
           enrollment_status: famEnrollNew,
         },
         beneficiary: {
@@ -259,6 +260,9 @@ export function SecretaryBeneficiariesPage() {
             name: member.name.trim(),
             family_relationship: member.family_relationship,
             gender: member.gender || null,
+            date_of_birth: member.date_of_birth || null,
+            health_status: member.health_status || null,
+            health_details: member.health_details.trim() || null,
           })),
       })
       const credentials = response.credentials
@@ -271,7 +275,7 @@ export function SecretaryBeneficiariesPage() {
       }
       setShowCreateDialog(false)
       setNationalId('')
-      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '' }])
+      setCreateMembers([{ national_id: '', name: '', family_relationship: 'spouse', gender: '', date_of_birth: '', health_status: '', health_details: '' }])
       await load()
     } catch (ex) {
       setErr(extractErrorMessage(ex as Error, 'فشل الإنشاء'))
@@ -302,6 +306,14 @@ export function SecretaryBeneficiariesPage() {
       if (editDob.trim()) {
         payload.date_of_birth = editDob.trim()
       }
+
+        if (editHealthStatus.trim()) {
+          payload.health_status = editHealthStatus.trim()
+        }
+
+        if (editHealthDetails.trim()) {
+          payload.health_details = editHealthDetails.trim()
+        }
 
         await api.updateBeneficiary(Number(editId), payload)
         setMsg('تم تحديث بيانات المستفيد.')
@@ -1382,9 +1394,26 @@ export function SecretaryBeneficiariesPage() {
                 value={editDob}
                 onChange={(e) => setEditDob(e.target.value)}
               />
+              <select
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                value={editHealthStatus}
+                onChange={(e) => setEditHealthStatus(e.target.value)}
+              >
+                <option value="">الحالة الصحية</option>
+                <option value="healthy">سليم</option>
+                <option value="chronic">مرض مزمن</option>
+                <option value="disabled">إعاقة</option>
+                <option value="temporary">مرض مؤقت</option>
+              </select>
+              <input
+                className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+                placeholder="تفاصيل صحية"
+                value={editHealthDetails}
+                onChange={(e) => setEditHealthDetails(e.target.value)}
+              />
               <button type="submit" className="rounded-lg bg-violet-600 py-2 text-white sm:col-span-2">
                 حفظ تعديل المستفيد
-              </SubmitButton>
+              </button>
               <button type="button" onClick={() => void onRecalc()} className="rounded-lg border border-white/20 px-3 py-2 text-xs sm:col-span-2">
                 إعادة تصنيف تلقائية
               </button>

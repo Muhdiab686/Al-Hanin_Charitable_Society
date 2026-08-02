@@ -91,6 +91,7 @@ export function BeneficiaryAppointmentsPage() {
         requested_specialty: specialty,
         reason: reason.trim() || undefined,
         preferred_date: preferredDate || undefined,
+        preferred_time: preferredTime,
       })
       setMsg('تم إرسال طلب الموعد بنجاح. بانتظار موافقة السكرتارية.')
       await load()
@@ -153,11 +154,23 @@ export function BeneficiaryAppointmentsPage() {
               )
             })}
           </select>
-          <input
-            type="date"
+          <select
             className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
             value={preferredDate}
             onChange={(e) => setPreferredDate(e.target.value)}
+          >
+            <option value="">اختر التاريخ المفضل</option>
+            {availableDateOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="time"
+            className="rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"
+            value={preferredTime}
+            onChange={(e) => setPreferredTime(e.target.value)}
           />
           <textarea
             className="sm:col-span-2 rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white"

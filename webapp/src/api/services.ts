@@ -1074,6 +1074,13 @@ export async function createStripeCheckout(payload: {
   return data
 }
 
+export async function confirmStripeCheckout(
+  sessionId: string,
+): Promise<{ message: string; donation: Record<string, unknown> }> {
+  const { data } = await apiClient.post(`${v1}/donations/stripe/confirm/${sessionId}`)
+  return data
+}
+
 export async function requestBeneficiaryAppointment(payload: {
   doctor_id: number
   requested_specialty: string

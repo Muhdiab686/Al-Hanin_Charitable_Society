@@ -46,7 +46,7 @@ class ClinicApiTest extends TestCase
 
     private function nextAvailableDate(array $availableDays): Carbon
     {
-        $date = now()->startOfDay();
+        $date = now()->addDay()->startOfDay();
 
         for ($offset = 0; $offset < 14; $offset++) {
             if (in_array($date->format('l'), $availableDays, true)) {

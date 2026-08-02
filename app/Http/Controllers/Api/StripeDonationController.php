@@ -42,7 +42,8 @@ class StripeDonationController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $successUrl = $validated['success_url'] ?? config('app.url').'/app/donor/donations?stripe=success';
+        $baseSuccess = $validated['success_url'] ?? config('app.url').'/app/donor/donations';
+        $successUrl = $baseSuccess.(str_contains($baseSuccess, '?') ? '&' : '?').'stripe=success&session_id={CHECKOUT_SESSION_ID}';
         $cancelUrl = $validated['cancel_url'] ?? config('app.url').'/app/donor/donations?stripe=cancel';
 
         $response = Http::withToken($secretKey)

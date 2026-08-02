@@ -223,7 +223,6 @@ export function StorekeeperInventoryPage() {
               <option value="">كل الفئات</option>
               <option value="non_perishable">غير سريع التلف</option>
               <option value="perishable">سريع التلف</option>
-              <option value="medical">طبي</option>
             </select>
             <button type="button" onClick={() => void load()} className="rounded-lg border border-white/15 px-3 py-2 text-xs">
               تحديث
@@ -346,7 +345,6 @@ export function StorekeeperInventoryPage() {
               >
                 <option value="non_perishable">غير سريع التلف</option>
                 <option value="perishable">سريع التلف</option>
-                <option value="medical">طبي</option>
               </select>
               {itemSpoilageCategory !== 'non_perishable' ? (
                 <input

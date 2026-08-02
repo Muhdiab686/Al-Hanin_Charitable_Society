@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { extractErrorMessage } from '../../api/client'
 import * as api from '../../api/services'
 import { SubmitButton } from '../../components/SubmitButton'
@@ -82,9 +82,38 @@ export function DonorDonationsPage() {
     }
   }
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const stripeConfirmedRef = useRef(false)
+
   useEffect(() => {
     void load()
   }, [])
+
+  useEffect(() => {
+    const stripeStatus = searchParams.get('stripe')
+    const sessionId = searchParams.get('session_id')
+
+    if (stripeStatus === 'cancel') {
+      setErr('تم إلغاء عملية الدفع.')
+      setSearchParams({}, { replace: true })
+      return
+    }
+
+    if (stripeStatus === 'success' && sessionId && !stripeConfirmedRef.current) {
+      stripeConfirmedRef.current = true
+      void (async () => {
+        try {
+          await api.confirmStripeCheckout(sessionId)
+          setMsg('تم تأكيد التبرع بنجاح. شكراً لك!')
+          void load()
+        } catch (ex) {
+          setErr(extractErrorMessage(ex, 'فشل تأكيد عملية الدفع'))
+        } finally {
+          setSearchParams({}, { replace: true })
+        }
+      })()
+    }
+  }, [searchParams, setSearchParams])
 
   async function onDonate(e: FormEvent) {
     e.preventDefault()

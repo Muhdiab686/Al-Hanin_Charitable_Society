@@ -77,9 +77,6 @@ export function StorekeeperDonationsPage() {
       </section>
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="font-semibold text-white">تسجيل تبرع عيني (يُضاف للمخزون)</h2>
-        <p className="mt-1 text-xs text-white/50">
-          اختر فئة «مواد طبية» للأدوية والمستلزمات الصيدلانية حتى تظهر في توزيع الوصفات الطبية.
-        </p>
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onInKind}>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-[11px] text-white/55">اسم الصنف / المادة</span>
@@ -106,7 +103,6 @@ export function StorekeeperDonationsPage() {
             >
               <option value="non_perishable">غير سريع التلف</option>
               <option value="perishable">سريع التلف</option>
-              <option value="medical">مواد طبية / صيدلانية</option>
             </select>
           </label>
           <label className="flex flex-col gap-1">
